@@ -6,30 +6,73 @@ A unified application framework that hosts multiple projects in a single interfa
 
 - Unified navigation system
 - Modular project architecture
-- PySide6-based GUI
+- Tkinter-based GUI (part of Python standard library)
+
+## Project Structure
+
+```
+Universal_App/
+├── core/             # Core application functionality
+├── ui/               # User interface components
+│   ├── components/   # Reusable UI components
+│   └── pages/        # Application pages
+└── utils/            # Utility functions and helpers
+```
 
 ## Setup
 
-1. Install dependencies:
+### Installation
+
 ```bash
+# Create and activate a virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # Unix/macOS
+# or
+.venv\Scripts\activate     # Windows
+
+# Install development dependencies
 pip install -r requirements.txt
+
+# Install in development mode
+pip install -e .
 ```
 
-2. Run the application:
+### Running the Application
+
+#### Method 1: Using run.py
 ```bash
-python main.py
+python run.py
 ```
 
-## Structure
+#### Method 2: After installing the package
+```bash
+universal-app
+```
 
-The application provides a sidebar navigation system that allows switching between different projects/modules. Each project operates within its own section of the application, sharing common UI elements and resources.
+## Development
 
-## Adding New Projects
+### Adding New Projects
 
-To add a new project to the universal app:
+To add a new project module to the application:
 
-1. Create your project's main widget/page
-2. Add a navigation entry in the sidebar
-3. Connect your project to the main application flow
+1. Create a new page in `ui/pages/` (inherit from `BasePage`)
+2. Add the page to the `MainWindow.setup_pages()` method in `ui/main_window.py`
+3. Add a navigation button in the `Sidebar._setup_navigation()` method in `ui/components/sidebar.py`
 
-See the code comments for more detailed instructions on integration.
+### Code Style
+
+This project uses:
+- Black for code formatting
+- Flake8 for linting
+
+Run formatting and linting:
+```bash
+black core ui utils
+flake8 core ui utils
+```
+
+### Testing
+
+```bash
+pytest
+```
