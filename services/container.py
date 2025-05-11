@@ -3,6 +3,16 @@ Dependency Injection Container module for the Universal App.
 
 This module defines a centralized container for managing service dependencies
 and implementing the Dependency Inversion Principle with a proper DI container.
+The container uses a registration-based system that allows dynamic service
+registration, interface-based resolution, and support for multiple
+implementations of the same interface.
+
+Key Features:
+- Service registration with interface types
+- Type-safe access to services by interface
+- Support for multiple implementations of the same interface
+- Identity preservation for testing
+- Dynamic service resolution
 """
 from dependency_injector import containers, providers
 from typing import Optional, Dict, Any, Callable, Type, cast, TypeVar
@@ -40,6 +50,13 @@ class ServiceRegistry:
     This registry holds metadata about services, their instances,
     factory functions, and interface types, enabling a more
     extensible dependency injection system.
+
+    Key features:
+    - Maps service names to their metadata (instance, interface, factory function)
+    - Maps interface types to their implementing services
+    - Supports multiple implementations of the same interface
+    - Maintains service identity for consistent behavior in tests
+    - Provides lookup by both name and interface type
     """
 
     def __init__(self):
@@ -149,6 +166,11 @@ class ServiceRegistry:
         """
         Get all service names that implement an interface type.
 
+        Returns all service names that were registered with the specified
+        interface type. This allows retrieving multiple implementations
+        of the same interface, which is useful for strategy patterns,
+        plugins, or composite patterns.
+
         Args:
             interface_type: Type of the service interface
 
@@ -157,6 +179,11 @@ class ServiceRegistry:
 
         Raises:
             ValueError: If interface not registered
+
+        Example:
+            service_names = registry.get_all_by_interface(DataProcessorInterface)
+            for name in service_names:
+                print(f"Found processor: {name}")
         """
         if interface_type not in self._interface_mappings:
             raise ValueError(f"No services registered for interface {interface_type.__name__}")
@@ -209,10 +236,14 @@ def create_kaggle_data_manager_provider():
 class Container(containers.DeclarativeContainer):
     """
     Dependency Injection Container for the Universal App.
-    
+
     This container manages service dependencies and provides a clean way to
     access services through their interfaces, supporting the Dependency
     Inversion Principle.
+
+    The container works with the ServiceRegistry to maintain registrations
+    and support dynamic service resolution. It leverages dependency-injector's
+    providers to manage service lifecycle and dependencies.
     """
     
     # Configuration provider (can be used to configure services)
@@ -268,6 +299,8 @@ def get_service_by_interface(interface_type: Type[T]) -> T:
     Get a service implementation by its interface type.
 
     This returns the most recently registered service for the interface.
+    When multiple services implement the same interface, this function
+    returns the implementation that was registered last.
 
     Args:
         interface_type: The interface type to resolve
@@ -277,6 +310,13 @@ def get_service_by_interface(interface_type: Type[T]) -> T:
 
     Raises:
         ValueError: If no service is registered for the interface
+
+    Example:
+        ```python
+        # Get implementation of LoggerInterface
+        logger = get_service_by_interface(LoggerInterface)
+        logger.log("Service resolved dynamically")
+        ```
     """
     try:
         service_name = registry.get_by_interface(interface_type)
@@ -291,7 +331,9 @@ def get_all_services_by_interface(interface_type: Type[T]) -> Dict[str, T]:
     Get all service implementations for an interface type.
 
     This returns a dictionary mapping service names to their implementations
-    for all services registered with the specified interface.
+    for all services registered with the specified interface. This is useful
+    when you need to access multiple implementations of the same interface,
+    such as for strategy patterns or plugin systems.
 
     Args:
         interface_type: The interface type to resolve
@@ -301,6 +343,17 @@ def get_all_services_by_interface(interface_type: Type[T]) -> Dict[str, T]:
 
     Raises:
         ValueError: If no services are registered for the interface
+
+    Example:
+        ```python
+        # Get all implementations of StorageInterface
+        storage_services = get_all_services_by_interface(StorageInterface)
+
+        # Use each storage service
+        for name, storage in storage_services.items():
+            print(f"Using {name}")
+            storage.save(data)
+        ```
     """
     try:
         service_names = registry.get_all_by_interface(interface_type)
@@ -321,14 +374,29 @@ def override_provider(service_name: str, implementation: object) -> None:
     Override a provider with a different implementation.
 
     This is particularly useful for testing, where you want to replace
-    real implementations with mocks or test doubles.
-    
+    real implementations with mocks or test doubles. The override
+    is temporary and can be reset using reset_overrides() or
+    reset_single_provider().
+
     Args:
         service_name: Name of the service to override (without '_provider' suffix)
-        implementation: The implementation to use
-        
+        implementation: The implementation to use (typically a mock object)
+
     Raises:
         ValueError: If the provider doesn't exist
+
+    Example:
+        ```python
+        # Create a mock service
+        mock_service = MagicMock()
+        mock_service.get_data.return_value = {'mocked': True}
+
+        # Override the real service
+        override_provider('data_service', mock_service)
+
+        # Later reset to the original implementation
+        reset_overrides()
+        ```
     """
     provider_attr = f"{service_name}_provider"
     if hasattr(container, provider_attr):
@@ -343,7 +411,25 @@ def reset_overrides() -> None:
     Reset all provider overrides to their original implementations.
 
     This function is idempotent and can be called multiple times safely.
-    It ensures the container returns to its original state.
+    It ensures the container returns to its original state. This is particularly
+    useful in test teardown to ensure tests don't affect each other.
+
+    The function safely handles cases where providers might not exist in the
+    container but are registered in the registry.
+
+    Example:
+        ```python
+        try:
+            # Override some services for testing
+            override_provider('service1', mock1)
+            override_provider('service2', mock2)
+
+            # Run the test
+            run_test()
+        finally:
+            # Reset all overrides to original implementations
+            reset_overrides()
+        ```
     """
     for service_name in registry.get_all_names():
         provider_attr = f"{service_name}_provider"
@@ -360,11 +446,27 @@ def reset_single_provider(service_name: str) -> None:
     """
     Reset a single provider to its original implementation.
 
+    This function resets only one specific service provider to its original
+    implementation, rather than resetting all providers as reset_overrides does.
+    This is useful when you want to maintain some mock services while resetting others.
+
     Args:
         service_name: Name of the service to reset
 
     Raises:
         ValueError: If the service doesn't exist
+
+    Example:
+        ```python
+        # Override multiple services
+        override_provider('service1', mock1)
+        override_provider('service2', mock2)
+
+        # Reset just one of them
+        reset_single_provider('service1')
+
+        # Now service1 is reset but service2 is still mocked
+        ```
     """
     if not registry.is_registered(service_name):
         raise ValueError(f"Service '{service_name}' not registered")
@@ -384,9 +486,23 @@ def reset_single_provider(service_name: str) -> None:
 def get_all_services() -> Dict[str, Any]:
     """
     Get all registered services with their metadata.
-    
+
+    This function returns a dictionary containing information about all
+    registered services, including their interface types and instances.
+    This is primarily useful for debugging and inspecting the container state.
+
     Returns:
-        Dict mapping service names to their metadata
+        Dict mapping service names to their metadata (interface name and instance)
+
+    Example:
+        ```python
+        # Get all registered services
+        services = get_all_services()
+
+        # Print service information
+        for name, info in services.items():
+            print(f"Service: {name}, Interface: {info['interface']}")
+        ```
     """
     result = {}
     for service_name in registry.get_all_names():
@@ -398,21 +514,41 @@ def get_all_services() -> Dict[str, Any]:
     return result
 
 
-def register_service(name: str, instance: Any, interface_type: Type, 
+def register_service(name: str, instance: Any, interface_type: Type,
                     factory_fn: Callable) -> None:
     """
     Register a new service with the container.
-    
-    This function allows dynamic registration of new services.
-    
+
+    This function allows dynamic registration of new services without
+    modifying the container code directly. It adds the service to the
+    registry and creates a provider in the container.
+
     Args:
         name: Service name (without '_provider' suffix)
         instance: Service singleton instance
-        interface_type: Type of the service interface
+        interface_type: Type of the service interface (Protocol class)
         factory_fn: Factory function to create the provider
-        
+
     Raises:
         ValueError: If service already registered
+
+    Example:
+        ```python
+        # Define a service and its factory
+        payment_service = PaymentService()
+
+        def create_payment_service_provider():
+            from dependency_injector import providers
+            return providers.Singleton(lambda: payment_service)
+
+        # Register with the container
+        register_service(
+            'payment_service',
+            payment_service,
+            PaymentServiceInterface,
+            create_payment_service_provider
+        )
+        ```
     """
     if registry.is_registered(name):
         raise ValueError(f"Service '{name}' already registered")

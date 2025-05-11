@@ -7,7 +7,9 @@ A unified application framework that hosts multiple projects in a single interfa
 Universal App is built on modern software architecture principles:
 
 - **SOLID Design**: All five SOLID principles are fully implemented
-- **Dependency Injection**: Services accessed via a robust DI container
+- **Dependency Injection**: Services accessed via a robust registration-based DI container
+- **Dynamic Service Registration**: Extensible service registration system with interface-based resolution
+- **Multiple Interface Implementations**: Support for multiple services implementing the same interface
 - **Composition Over Inheritance**: UI components use composition pattern
 - **Protocol-Based Interfaces**: Type-safe interfaces via Python Protocols
 - **Standardized Error Handling**: Consistent exception hierarchy
@@ -676,53 +678,62 @@ The application follows a service-oriented architecture with interfaces:
 
 #### Dependency Injection Container
 
-The application uses a proper dependency injection container based on the `dependency-injector` package to implement the Dependency Inversion Principle:
+The application uses a robust registration-based dependency injection container based on the `dependency-injector` package to implement the Dependency Inversion Principle:
 
 ```python
 from services.container import get_r_service, get_actuarial_service
+from services.container import get_service_by_interface, get_all_services_by_interface
+from services.interfaces.r_service import RServiceInterface
 
 # Get service implementations through the container
 r_service = get_r_service()
 actuarial_service = get_actuarial_service()
 
-# Use services through their interfaces
-if r_service.is_available():
-    # Do something with the R service
+# Or resolve services dynamically by interface type
+r_service = get_service_by_interface(RServiceInterface)
+
+# Get all implementations of an interface
+all_loggers = get_all_services_by_interface(LoggerInterface)
 ```
 
 ##### Container Implementation
 
 The container is implemented in `services/container.py` and follows these key principles:
 
-1. **Interface-based design**: Services are accessed through their protocol interfaces
-2. **Singleton management**: The container manages service lifecycles (typically as singletons)
-3. **Lazy initialization**: Services are only instantiated when first requested
-4. **Clear access patterns**: Helper functions provide type-safe access to services
+1. **Registration-based design**: Services are registered with the container using interface types
+2. **Dynamic interface resolution**: Services can be resolved by interface type at runtime
+3. **Multiple interface implementations**: Support for multiple services implementing the same interface
+4. **Singleton management**: The container manages service lifecycles (typically as singletons)
+5. **Identity preservation**: Original service instances are preserved for testing
+6. **Clear access patterns**: Helper functions provide type-safe access to services
 
 ```python
-# Sample container implementation
-from dependency_injector import containers, providers
+# Service registration
+def register_service(name, instance, interface_type, factory_fn):
+    """Register a new service with the container."""
+    registry.register(name, instance, interface_type, factory_fn)
+    provider = factory_fn()
+    setattr(container, f"{name}_provider", provider)
 
-class Container(containers.DeclarativeContainer):
-    """Dependency Injection Container for the Universal App."""
+# Interface-based resolution
+def get_service_by_interface(interface_type: Type[T]) -> T:
+    """Get a service implementation by its interface type."""
+    service_name = registry.get_by_interface(interface_type)
+    provider = getattr(container, f"{service_name}_provider")
+    return cast(T, provider())
 
-    # Configuration provider
-    config = providers.Configuration()
-
-    # Service providers
-    r_service_provider = providers.Singleton(lambda: r_service)
-    kaggle_service_provider = providers.Singleton(lambda: kaggle_service)
-    actuarial_service_provider = providers.Singleton(lambda: actuarial_service)
-
-    # Additional providers as needed...
-
-# Helper function example
-def get_r_service() -> RServiceInterface:
-    """Get the R service implementation."""
-    return container.r_service_provider()
+# Multiple interface implementations
+def get_all_services_by_interface(interface_type: Type[T]) -> Dict[str, T]:
+    """Get all implementations of an interface type."""
+    service_names = registry.get_all_by_interface(interface_type)
+    result = {}
+    for name in service_names:
+        provider = getattr(container, f"{name}_provider")
+        result[name] = cast(T, provider())
+    return result
 ```
 
-This ensures that components depend on abstractions (interfaces/protocols) rather than concrete implementations, adhering to the Dependency Inversion Principle.
+This ensures that components depend on abstractions (interfaces/protocols) rather than concrete implementations, adhering to the Dependency Inversion Principle, while providing a truly extensible system.
 
 #### Testing with the Container
 
