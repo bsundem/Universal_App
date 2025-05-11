@@ -18,6 +18,8 @@ This repository serves as a container for multiple projects until they grow larg
   - `actuarial/`: Actuarial calculation services
   - `interfaces/`: Service interfaces (Interface Segregation Principle)
   - `kaggle/`: Kaggle data services
+  - `container.py`: Dependency injection container (Dependency Inversion Principle)
+  - `provider.py`: Legacy service provider (deprecated)
   - `r_service.py`: R integration service
 - `r_scripts/`: R scripts for specialized calculations
   - `actuarial/`: Actuarial R scripts
@@ -30,9 +32,10 @@ This repository serves as a container for multiple projects until they grow larg
 - `ui/`: User interface components
   - `components/`: Reusable UI components
     - `page_container.py`: Page container component (Composition over Inheritance)
+    - `sidebar.py`: Navigation sidebar component
   - `pages/`: Application pages
-    - `base_page.py`: Legacy base page (inheritance approach)
     - `content_page.py`: Modern content page (composition approach)
+    - Various application pages using the composition pattern
 - `utils/`: Utility functions and helpers
   - `error_handling.py`: Standardized error handling system
   - `logging.py`: Logging strategy implementation
@@ -46,27 +49,60 @@ This repository serves as a container for multiple projects until they grow larg
 This is a Python-based project using Tkinter for the GUI with the following environment setup:
 - Python virtual environment (`.venv/`)
 - VSCode as the editor (`.vscode/`)
+- Dependency-injector for service management
 - Tkinter for GUI components (part of Python standard library)
 - R integration via rpy2 (optional)
 - Pandas, Matplotlib for data analysis (optional)
+- Kaggle API for data science integration (optional)
 - Black for code formatting
 - Flake8 for linting
-- Pytest for testing
+- Pytest for testing with DI container support
 
 ## Setup and Running
 
+### Basic Installation
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Unix/macOS
+# or
+.venv\Scripts\activate     # Windows
 
-# Install in development mode
+# Install core dependencies
 pip install -e .
+```
 
-# Run the application (method 1)
+### Development Installation
+```bash
+# Install with development tools
+pip install -e ".[dev]"
+
+# Install all dependencies
+pip install -e ".[all]"
+
+# Or use requirements.txt for all dependencies
+pip install -r requirements.txt
+```
+
+### Running the Application
+```bash
+# Method 1: Using run.py script
 python run.py
 
-# Run the application (method 2, after installing)
+# Method 2: Using entry point (after installation)
 universal-app
+```
+
+### Feature-Specific Dependencies
+```bash
+# R integration only
+pip install -e ".[r]"
+
+# Data analysis capabilities only
+pip install -e ".[data]"
+
+# Kaggle integration only
+pip install -e ".[kaggle]"
 ```
 
 ## Application Architecture
@@ -86,11 +122,13 @@ The application follows a clean architecture pattern with clear separation of co
      - Pages are shown/hidden based on navigation
 
 2. **Service Layer**:
-   - Service interfaces in `services/interfaces/` define contracts
+   - Service interfaces in `services/interfaces/` define contracts as protocols
    - Domain-specific services in the `services/` directory implement interfaces
+   - Dependency injection container in `services/container.py` manages services
+   - Service retrieval through container via `get_*_service()` functions
    - Each service provides business logic for a specific domain
    - Services should be stateless when possible
-   - UI components call services to perform business operations
+   - UI components call services through the container
    - Error handling is standardized via the error handling system
 
 3. **External Integrations**:
@@ -113,24 +151,49 @@ The application follows a clean architecture pattern with clear separation of co
    - Unit tests for isolated component testing
    - Integration tests for component interactions
    - Functional tests for end-to-end workflows
-   - Mock objects for isolating tests from external dependencies
+   - Test fixtures for common testing scenarios in `conftest.py`
+   - Mock services via the DI container's `override_provider` mechanism
+   - Test markers for categorizing different types of tests
+   - UI component testing with mocked service dependencies
 
 ## Adding New Projects
 
 To add a new project module to the application:
 
-1. Create a new page class in `ui/pages/`:
-   - Use `ContentPage` as the base class (using composition)
-   - **Do not** use `BasePage` which is deprecated
-2. Create interfaces for your services in `services/interfaces/`
-3. Implement the service interfaces in the `services/` directory
-4. Use error handling and logging utilities in your services and pages
-5. Configure any needed settings in the configuration system
-6. Add the page to the `MainWindow.setup_pages()` method in `ui/main_window.py`
-7. Add a navigation button in the `Sidebar._setup_navigation()` method in `ui/components/sidebar.py`
-8. Add appropriate tests in the `tests/` directory
+1. **Define Service Interfaces**:
+   - Create protocol classes in `services/interfaces/`
+   - Define clear method signatures with proper type hints
+   - Split large interfaces into smaller, focused ones (ISP)
 
-For an example of creating a page using composition, refer to `ui/pages/example_page.py`.
+2. **Implement Services**:
+   - Create service implementations in a dedicated directory under `services/`
+   - Implement all methods defined in the interfaces
+   - Use error handling decorators for consistent error management
+   - Add logging throughout using the logging utility
+
+3. **Register with DI Container**:
+   - Add service to the container in `services/container.py`
+   - Create helper functions for retrieving the service
+   - Ensure singleton behavior if appropriate
+
+4. **Create UI Components**:
+   - Add a new page class in `ui/pages/` using `ContentPage` as base
+   - Retrieve services via the container in the constructor
+   - Follow the composition pattern for UI elements
+   - Delegate business logic to services
+
+5. **Add Navigation**:
+   - Add the page to `MainWindow.setup_pages()` method
+   - Add a navigation button in `Sidebar._setup_navigation()`
+   - Update page mapping for navigation by name
+
+6. **Write Tests**:
+   - Create unit tests with mocked services using the container
+   - Add test fixtures for the new services in `conftest.py` if needed
+   - Test the UI components with mocked services
+   - Add integration tests for service interactions
+
+For a complete example of extending the application, see the comprehensive guide in the README's "Adding New Projects" section.
 
 ## Development Workflow
 
@@ -163,7 +226,9 @@ The project uses pytest for testing with different test categories:
    - `unit`: Unit tests
    - `integration`: Integration tests
    - `functional`: Functional tests
+   - `container`: Tests that use the dependency injection container
    - `r_dependent`: Tests requiring R installation
+   - `kaggle_dependent`: Tests requiring Kaggle credentials
    - `slow`: Tests that take a long time to run
    - `network`: Tests requiring network access
 
@@ -194,8 +259,11 @@ The application implements SOLID design principles:
 
 5. **Dependency Inversion Principle**:
    - High-level modules depend on abstractions, not implementations
-   - UI components depend on service interfaces
-   - Services depend on configuration and infrastructure abstractions
+   - UI components depend on service interfaces, not concrete classes
+   - Dependency injection container manages service instances
+   - Services are accessed via their interfaces through the container
+   - UI components get services through helper functions like `get_r_service()`
+   - Mock implementations can be easily swapped in for testing
 
 Additional architectural principles:
 
@@ -216,10 +284,12 @@ Additional architectural principles:
    - Configuration should be externalized
 
 9. **Testability**:
-   - Code should be designed with testing in mind
-   - Use dependency injection to facilitate mocking
-   - Avoid tight coupling between components
-   - Interfaces enable easy mocking
+   - Code is designed with testing in mind
+   - DI container facilitates service mocking via `override_provider`
+   - Test fixtures provide standardized mock services
+   - UI components can be tested with mocked services
+   - Interfaces enable precise contract verification
+   - Container-based tests ensure loose coupling
 
 ## Future Direction
 
@@ -230,9 +300,11 @@ As projects are added to this repository:
 3. Consider implementing a plugin architecture for more complex projects
 4. Expand the testing framework as needed
 5. Further improve these architectural components:
-   - Add a proper dependency injection container
-   - Implement a service locator pattern
+   - Enhance the dependency injection container with more features
    - Create a comprehensive event system for inter-service communication
    - Add a transaction management system for multi-step operations
    - Implement robust validation frameworks for inputs and outputs
    - Add more sophisticated caching mechanisms
+   - Implement a plugin architecture for dynamic module loading
+   - Enhance testing with automated UI testing
+   - Add performance monitoring and diagnostics

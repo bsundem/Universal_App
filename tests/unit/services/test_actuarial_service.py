@@ -4,7 +4,7 @@ Unit tests for the Actuarial service.
 import pytest
 from unittest.mock import patch, MagicMock
 import pandas as pd
-from services.actuarial.actuarial_service import ActuarialService
+from services.actuarial.actuarial_service import ActuarialService, actuarial_service as actual_service
 
 
 class TestActuarialService:

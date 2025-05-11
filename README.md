@@ -2,19 +2,39 @@
 
 A unified application framework that hosts multiple projects in a single interface. This repository serves as a container for various projects until they grow large enough to be moved into their own repositories.
 
+## Project Overview
+
+Universal App is built on modern software architecture principles:
+
+- **SOLID Design**: All five SOLID principles are fully implemented
+- **Dependency Injection**: Services accessed via a robust DI container
+- **Composition Over Inheritance**: UI components use composition pattern
+- **Protocol-Based Interfaces**: Type-safe interfaces via Python Protocols
+- **Standardized Error Handling**: Consistent exception hierarchy
+- **Centralized Configuration**: Multi-source configuration management
+- **Comprehensive Logging**: Context-aware logging throughout the app
+
 ## Features
 
-- Unified navigation system
-- Modular project architecture
-- Tkinter-based GUI (part of Python standard library)
-- Service-oriented architecture with clean interfaces
-- R integration for specialized calculations
-- Kaggle data exploration capabilities
-- Comprehensive testing framework
-- Configuration management system
-- Structured error handling
-- Consistent logging strategy
-- Implementation of SOLID design principles
+### Architecture
+- **Dependency Injection Container**: Service management with `dependency-injector`
+- **Protocol-Based Interfaces**: Type-safe service contracts
+- **Composition-Based UI**: Modular, testable UI components
+- **Service-Oriented Design**: Clean separation of business logic
+
+### Technology
+- **Tkinter GUI**: Cross-platform native interface (Python standard library)
+- **R Integration**: Interface with R for statistical calculations
+- **Kaggle API**: Data science toolkit integration
+- **Pandas/Matplotlib**: Data analysis and visualization
+- **Pytest Testing**: Comprehensive test suite with DI support
+
+### Design & Development
+- **SOLID Principles**: Complete implementation of all five principles
+- **Error Handling System**: Standardized exception hierarchy with context
+- **Centralized Configuration**: Multiple sources with environment support
+- **Comprehensive Logging**: Context-aware, structured logging
+- **Testability**: Mock services, UI testing, and DI container tests
 
 ## Project Structure
 
@@ -682,22 +702,67 @@ This makes it easy to test components in isolation without dependencies on actua
 
 ### Design Principles
 
-The application implements SOLID design principles:
+The application fully implements all SOLID design principles:
 
-1. **Single Responsibility Principle**: Each class has one responsibility
-2. **Open/Closed Principle**: Classes are open for extension but closed for modification
-3. **Liskov Substitution Principle**: Subtypes must be substitutable for their base types
-4. **Interface Segregation Principle**: Clients shouldn't depend on methods they don't use
-5. **Dependency Inversion Principle**: High-level modules depend on abstractions, not implementations
-   - Interfaces defined as protocols in `services/interfaces/`
-   - Service provider mechanism in `services/provider.py`
-   - Components request services by interface rather than importing concrete implementations
+1. **Single Responsibility Principle**:
+   - Each class has one clear responsibility
+   - Services are organized by domain (actuarial, kaggle, etc.)
+   - UI components focus on presentation, delegating business logic to services
 
-Additionally, the application follows:
+2. **Open/Closed Principle**:
+   - Classes are open for extension but closed for modification
+   - New functionality is added through new classes rather than modifying existing ones
+   - Page container system allows extending without modifying base code
 
-1. **Composition Over Inheritance**: Using composition (e.g., `PageContainer`) instead of inheritance
-2. **Dependency Injection**: Services are injected into classes that need them
-3. **Separation of Concerns**: UI, business logic, and data access are separated
+3. **Liskov Substitution Principle**:
+   - Implementation types are substitutable for their interfaces
+   - Service mock implementations work seamlessly in place of real ones
+   - All service implementations adhere to their protocol contracts
+
+4. **Interface Segregation Principle**:
+   - Interfaces are focused and client-specific
+   - Clear separation between different service types
+   - Protocols are defined in `services/interfaces/` with focused method sets
+
+5. **Dependency Inversion Principle**:
+   - High-level modules depend on abstractions, not implementations
+   - Dependency injection container manages service instances
+   - UI components and business logic connect through interfaces
+
+### Dependency Injection
+
+The application uses a full-featured dependency injection container:
+
+```python
+# Service definition
+from services.container import get_r_service
+
+class SomeComponent:
+    def __init__(self):
+        # Get service through the container
+        self.r_service = get_r_service()
+
+    def do_something(self):
+        # Use the service through its interface
+        if self.r_service.is_available():
+            result = self.r_service.call_function("analyze", data=my_data)
+```
+
+Key benefits:
+- **Loose Coupling**: Components depend on interfaces, not implementations
+- **Testability**: Easy to replace services with mocks for testing
+- **Flexibility**: Service implementations can be changed without modifying clients
+- **Lifecycle Management**: Container handles singleton instances
+
+### Additional Architectural Patterns
+
+The application also follows:
+
+1. **Composition Over Inheritance**: UI components use composition through `PageContainer`
+2. **Service Locator**: Container provides centralized service location
+3. **Separation of Concerns**: UI, business logic, and data access are cleanly separated
+4. **Observer Pattern**: UI components communicate through callbacks
+5. **Factory Method**: Services create and return complex objects
 
 ### R Integration
 
@@ -785,7 +850,7 @@ The application includes a comprehensive logging system:
 
 ### Testing Framework
 
-The project includes a comprehensive testing framework:
+The project includes a comprehensive testing framework with dependency injection support:
 
 1. **Unit Tests**: Test individual components in isolation
    ```bash
@@ -808,11 +873,58 @@ The project includes a comprehensive testing framework:
 
 4. **Test Categories**: Tests are categorized with markers
    ```bash
+   # Run only tests that use the DI container
+   pytest -m container
+
    # Run only tests that require R
    pytest -m r_dependent
 
    # Skip tests that require R
    pytest -k "not r_dependent"
+   ```
+
+#### Testing with Dependency Injection
+
+The project uses a dependency injection container that makes testing much easier:
+
+1. **Mock Service Registration**: Override service implementations for testing:
+   ```python
+   from services.container import override_provider, reset_overrides
+
+   # Setup
+   def setup():
+       mock_service = MagicMock()
+       override_provider("r_service", mock_service)
+       return mock_service
+
+   # Teardown
+   def teardown():
+       reset_overrides()
+   ```
+
+2. **Test Fixtures**: Use the provided fixtures for common testing scenarios:
+   ```python
+   # These fixtures are available in all tests
+   @pytest.mark.container
+   def test_example(mock_r_service, mock_kaggle_service):
+       # Test with mock services
+       r_service = get_r_service()  # Returns the mock
+       result = r_service.is_available()
+       mock_r_service.is_available.assert_called_once()
+   ```
+
+3. **UI Testing with Mocked Services**: Test UI components with mocked dependencies:
+   ```python
+   @pytest.mark.container
+   def test_ui_component(tk_root, mock_r_service):
+       # Create UI component that will automatically use the mock service
+       component = SomeComponent(tk_root)
+
+       # Test component behavior
+       component.do_something()
+
+       # Verify interactions with the mock service
+       mock_r_service.some_method.assert_called_once()
    ```
 
 For more details on the testing framework, see the [tests README](tests/README.md).

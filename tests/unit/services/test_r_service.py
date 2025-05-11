@@ -47,12 +47,16 @@ class TestRService:
         """Test executing a script that doesn't exist."""
         # Mock os.path.exists to return False
         monkeypatch.setattr(os.path, 'exists', lambda path: False)
-        
-        # Call the method
-        result = r_service.execute_script("nonexistent.R")
-        
-        # Check the result
-        assert result is None
+
+        # Import the ServiceError
+        from utils.error_handling import ServiceError
+
+        # Call the method - should raise ServiceError
+        with pytest.raises(ServiceError) as excinfo:
+            r_service.execute_script("nonexistent.R")
+
+        # Check the error message contains the expected text
+        assert "not found" in str(excinfo.value)
 
     def test_execute_script_success(self, r_service, monkeypatch):
         """Test successfully executing a script."""

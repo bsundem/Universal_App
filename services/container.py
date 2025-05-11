@@ -86,21 +86,25 @@ def get_kaggle_data_manager() -> KaggleDataManagerInterface:
 def override_provider(provider_name: str, implementation: object) -> None:
     """
     Override a provider with a different implementation.
-    
+
     This is particularly useful for testing, where you want to replace
     real implementations with mocks or test doubles.
-    
+
     Args:
         provider_name: Name of the provider to override
         implementation: The implementation to use
     """
     if hasattr(container, f"{provider_name}_provider"):
         provider = getattr(container, f"{provider_name}_provider")
-        provider.override(providers.Singleton(lambda: implementation))
+        provider.override(providers.Object(implementation))
     else:
         raise ValueError(f"Provider '{provider_name}' does not exist")
 
 
 def reset_overrides() -> None:
     """Reset all provider overrides."""
-    container.reset_override_providers()
+    # Reset each provider individually
+    for attr_name in dir(container):
+        if attr_name.endswith('_provider'):
+            provider = getattr(container, attr_name)
+            provider.reset_override()
