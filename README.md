@@ -7,31 +7,44 @@ A unified application framework that hosts multiple projects in a single interfa
 - Unified navigation system
 - Modular project architecture
 - Tkinter-based GUI (part of Python standard library)
-- Service-oriented architecture for business logic
+- Service-oriented architecture with clean interfaces
 - R integration for specialized calculations
 - Kaggle data exploration capabilities
 - Comprehensive testing framework
+- Configuration management system
+- Structured error handling
+- Consistent logging strategy
+- Implementation of SOLID design principles
 
 ## Project Structure
 
 ```
 Universal_App/
-├── core/               # Core application functionality
-├── services/           # Business logic services
-│   ├── actuarial/      # Actuarial calculation services
-│   ├── kaggle/         # Kaggle data services
-│   └── r_service.py    # R integration service
-├── r_scripts/          # R scripts for specialized calculations
-│   ├── actuarial/      # Actuarial R scripts
-│   └── common/         # Common R utilities
-├── tests/              # Testing framework
-│   ├── unit/           # Unit tests
-│   ├── integration/    # Integration tests
-│   └── functional/     # Functional tests
-├── ui/                 # User interface components
-│   ├── components/     # Reusable UI components
-│   └── pages/          # Application pages
-└── utils/              # Utility functions and helpers
+├── config.json.template     # Configuration template
+├── core/                    # Core application functionality
+│   ├── app.py               # Main application class
+│   └── config.py            # Configuration management
+├── services/                # Business logic services
+│   ├── actuarial/           # Actuarial calculation services
+│   ├── interfaces/          # Service interfaces (ISP)
+│   ├── kaggle/              # Kaggle data services
+│   └── r_service.py         # R integration service
+├── r_scripts/               # R scripts for specialized calculations
+│   ├── actuarial/           # Actuarial R scripts
+│   └── common/              # Common R utilities
+├── tests/                   # Testing framework
+│   ├── unit/                # Unit tests
+│   ├── integration/         # Integration tests
+│   └── functional/          # Functional tests
+├── ui/                      # User interface components
+│   ├── components/          # Reusable UI components
+│   │   └── page_container.py # Page container (composition)
+│   └── pages/               # Application pages
+│       ├── base_page.py     # Legacy base page (inheritance)
+│       └── content_page.py  # New content page (composition)
+└── utils/                   # Utility functions and helpers
+    ├── error_handling.py    # Standardized error handling
+    └── logging.py           # Logging strategy
 ```
 
 ## Setup
@@ -86,18 +99,38 @@ universal-app
 
 To add a new project module to the application:
 
-1. Create a new page in `ui/pages/` (inherit from `BasePage`)
+1. Create a new page in `ui/pages/` (inherit from `ContentPage` for composition or `BasePage` for inheritance)
 2. Add any required business logic in the `services/` directory
-3. Add the page to the `MainWindow.setup_pages()` method in `ui/main_window.py`
-4. Add a navigation button in the `Sidebar._setup_navigation()` method in `ui/components/sidebar.py`
+3. Create interfaces for your services in `services/interfaces/`
+4. Add the page to the `MainWindow.setup_pages()` method in `ui/main_window.py`
+5. Add a navigation button in the `Sidebar._setup_navigation()` method in `ui/components/sidebar.py`
 
 ### Services Architecture
 
-The application follows a service-oriented architecture:
+The application follows a service-oriented architecture with interfaces:
 
 1. UI components should delegate business logic to services
 2. Services are organized by domain (e.g., `actuarial`, `kaggle`)
-3. Cross-cutting concerns have dedicated services (e.g., `r_service.py`)
+3. Service interfaces define contracts in `services/interfaces/`
+4. Cross-cutting concerns have dedicated services (e.g., `r_service.py`)
+5. Error handling is standardized through the error handling utilities
+6. Logging is consistent across all services
+
+### Design Principles
+
+The application implements SOLID design principles:
+
+1. **Single Responsibility Principle**: Each class has one responsibility
+2. **Open/Closed Principle**: Classes are open for extension but closed for modification
+3. **Liskov Substitution Principle**: Subtypes must be substitutable for their base types
+4. **Interface Segregation Principle**: Clients shouldn't depend on methods they don't use
+5. **Dependency Inversion Principle**: High-level modules depend on abstractions, not implementations
+
+Additionally, the application follows:
+
+1. **Composition Over Inheritance**: Using composition (e.g., `PageContainer`) instead of inheritance
+2. **Dependency Injection**: Services are injected into classes that need them
+3. **Separation of Concerns**: UI, business logic, and data access are separated
 
 ### R Integration
 
@@ -107,6 +140,82 @@ For R-based calculations:
 2. Use the `r_service` to execute R code and exchange data
 3. Create domain-specific services that use the R service
 
+### Configuration Management
+
+The application uses a centralized configuration system:
+
+1. **Configuration Sources**:
+   - Default values defined in config.py
+   - Environment variables (e.g., `APP_LOGGING_LEVEL=DEBUG`)
+   - Configuration files (searched for in standard locations)
+
+2. **Creating a Configuration File**:
+   ```bash
+   # Copy the template
+   cp config.json.template config.json
+
+   # Edit as needed
+   nano config.json
+   ```
+
+3. **Configuration Sections**:
+   - `app`: General application settings
+   - `logging`: Logging configuration
+   - `r`: R integration settings
+   - `kaggle`: Kaggle API settings
+
+### Error Handling
+
+The application uses a standardized error handling approach:
+
+1. **Error Classes**:
+   - `AppError`: Base exception class
+   - `ServiceError`: For service-related errors
+   - `ValidationError`: For input validation
+   - `DataError`: For data-related issues
+   - `ConfigurationError`: For configuration problems
+
+2. **Using Error Handling**:
+   ```python
+   from utils.error_handling import ServiceError, handle_service_errors
+
+   @handle_service_errors("MyService")
+   def my_function():
+       # Function body
+       if error_condition:
+           raise ServiceError("Error message", "service", "operation")
+   ```
+
+### Logging System
+
+The application includes a comprehensive logging system:
+
+1. **Getting a Logger**:
+   ```python
+   from utils.logging import get_logger
+
+   logger = get_logger(__name__)
+   logger.info("This is an info message")
+   logger.error("This is an error message")
+   ```
+
+2. **Logging Context**:
+   ```python
+   from utils.logging import LoggingContext
+
+   with LoggingContext(logger, user_id="123", action="login"):
+       logger.info("User action")  # Will include user_id and action in log
+   ```
+
+3. **Logging Function Calls**:
+   ```python
+   from utils.logging import log_function_call
+
+   @log_function_call()
+   def my_function():
+       # Function body
+   ```
+
 ### Testing Framework
 
 The project includes a comprehensive testing framework:
@@ -115,7 +224,7 @@ The project includes a comprehensive testing framework:
    ```bash
    # Run all unit tests
    pytest tests/unit
-   
+
    # Run unit tests for specific components
    pytest tests/unit/services
    ```
@@ -134,7 +243,7 @@ The project includes a comprehensive testing framework:
    ```bash
    # Run only tests that require R
    pytest -m r_dependent
-   
+
    # Skip tests that require R
    pytest -k "not r_dependent"
    ```
@@ -146,6 +255,7 @@ For more details on the testing framework, see the [tests README](tests/README.m
 This project uses:
 - Black for code formatting
 - Flake8 for linting
+- Type annotations throughout
 
 Run formatting and linting:
 ```bash

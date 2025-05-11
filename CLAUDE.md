@@ -4,15 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This repository serves as a container for multiple projects until they grow large enough to be moved into their own repositories. It provides a universal application that hosts different projects in a single interface using a service-oriented architecture.
+This repository serves as a container for multiple projects until they grow large enough to be moved into their own repositories. It provides a universal application that hosts different projects in a single interface using a service-oriented architecture with clean interfaces and following SOLID design principles.
 
 ## Project Structure
 
 - `.venv/`: Python virtual environment directory
 - `.vscode/`: VSCode configuration
+- `config.json.template`: Configuration template file
 - `core/`: Core application functionality
+  - `app.py`: Main application class
+  - `config.py`: Configuration management system
 - `services/`: Business logic services
   - `actuarial/`: Actuarial calculation services
+  - `interfaces/`: Service interfaces (Interface Segregation Principle)
   - `kaggle/`: Kaggle data services
   - `r_service.py`: R integration service
 - `r_scripts/`: R scripts for specialized calculations
@@ -25,8 +29,13 @@ This repository serves as a container for multiple projects until they grow larg
   - `conftest.py`: Shared pytest fixtures
 - `ui/`: User interface components
   - `components/`: Reusable UI components
+    - `page_container.py`: Page container component (Composition over Inheritance)
   - `pages/`: Application pages
+    - `base_page.py`: Legacy base page (inheritance approach)
+    - `content_page.py`: Modern content page (composition approach)
 - `utils/`: Utility functions and helpers
+  - `error_handling.py`: Standardized error handling system
+  - `logging.py`: Logging strategy implementation
 - `requirements.txt`: Python dependencies (for development)
 - `setup.py`: Package setup configuration
 - `run.py`: Executable entry point script
@@ -62,7 +71,7 @@ universal-app
 
 ## Application Architecture
 
-The application follows a clean architecture pattern with clear separation of concerns:
+The application follows a clean architecture pattern with clear separation of concerns and SOLID principles:
 
 1. **User Interface Layer**:
    - `MainWindow`: The primary container class (in `ui/main_window.py`)
@@ -71,27 +80,39 @@ The application follows a clean architecture pattern with clear separation of co
    - `Sidebar`: Navigation component (in `ui/components/sidebar.py`)
      - Left sidebar with navigation buttons for different projects/sections
      - Uses callback to notify when navigation items are selected
-   - Page System:
-     - `BasePage`: Base class for all pages (in `ui/pages/base_page.py`)
-     - Specialized page classes for each section (in `ui/pages/`)
+   - Page System (two approaches available):
+     - Inheritance approach:
+       - `BasePage`: Base class for all pages (in `ui/pages/base_page.py`)
+     - Composition approach (preferred):
+       - `PageContainer`: Component for page layout (in `ui/components/page_container.py`)
+       - `ContentPage`: Uses composition to create pages (in `ui/pages/content_page.py`)
      - Pages are shown/hidden based on navigation
 
 2. **Service Layer**:
-   - Domain-specific services in the `services/` directory
+   - Service interfaces in `services/interfaces/` define contracts
+   - Domain-specific services in the `services/` directory implement interfaces
    - Each service provides business logic for a specific domain
    - Services should be stateless when possible
    - UI components call services to perform business operations
+   - Error handling is standardized via the error handling system
 
 3. **External Integrations**:
-   - R integration via `r_service.py`
+   - R integration via `r_service.py` (implements RServiceInterface)
    - R scripts stored in the `r_scripts/` directory
    - External APIs accessed through appropriate services (e.g., Kaggle API)
 
 4. **Application Core**:
    - `Application` class in `core/app.py` manages application lifecycle
-   - Centralized configuration and initialization
+   - Centralized configuration via `config.py`
+   - Configuration loading from multiple sources
+   - Logging setup and management
 
-5. **Testing Layer**:
+5. **Cross-Cutting Concerns**:
+   - Error handling via `utils/error_handling.py`
+   - Logging via `utils/logging.py`
+   - Configuration management via `core/config.py`
+
+6. **Testing Layer**:
    - Unit tests for isolated component testing
    - Integration tests for component interactions
    - Functional tests for end-to-end workflows
@@ -101,11 +122,16 @@ The application follows a clean architecture pattern with clear separation of co
 
 To add a new project module to the application:
 
-1. Create a new page class in `ui/pages/` (inherit from `BasePage`)
-2. Create any required services in the `services/` directory
-3. Add the page to the `MainWindow.setup_pages()` method in `ui/main_window.py`
-4. Add a navigation button in the `Sidebar._setup_navigation()` method in `ui/components/sidebar.py`
-5. Add appropriate tests in the `tests/` directory
+1. Create a new page class in `ui/pages/`:
+   - Use `ContentPage` as the base class (preferred composition approach)
+   - Or inherit from `BasePage` (legacy inheritance approach)
+2. Create interfaces for your services in `services/interfaces/`
+3. Implement the service interfaces in the `services/` directory
+4. Use error handling and logging utilities in your services and pages
+5. Configure any needed settings in the configuration system
+6. Add the page to the `MainWindow.setup_pages()` method in `ui/main_window.py`
+7. Add a navigation button in the `Sidebar._setup_navigation()` method in `ui/components/sidebar.py`
+8. Add appropriate tests in the `tests/` directory
 
 ## Development Workflow
 
@@ -144,29 +170,70 @@ The project uses pytest for testing with different test categories:
 
 ## Design Principles
 
-1. **Separation of Concerns**:
+The application implements SOLID design principles:
+
+1. **Single Responsibility Principle**:
+   - Each class has one responsibility
+   - UI components handle only presentation
+   - Services handle only business logic
+   - Data managers handle only data transformations
+
+2. **Open/Closed Principle**:
+   - Classes are open for extension but closed for modification
+   - Service interfaces allow new implementations without changing existing code
+   - Decorators like `@handle_service_errors` extend functionality without modification
+
+3. **Liskov Substitution Principle**:
+   - Subtypes must be substitutable for their base types
+   - Services implementing interfaces must fulfill the interface contract
+   - Error handling and logging should work consistently across implementations
+
+4. **Interface Segregation Principle**:
+   - Clients shouldn't depend on methods they don't use
+   - Service interfaces are focused and specific
+   - UI components only use the services they need
+
+5. **Dependency Inversion Principle**:
+   - High-level modules depend on abstractions, not implementations
+   - UI components depend on service interfaces
+   - Services depend on configuration and infrastructure abstractions
+
+Additional architectural principles:
+
+6. **Composition Over Inheritance**:
+   - Use composition (e.g., `PageContainer`) to share functionality
+   - Favor object composition over class inheritance
+   - Enables more flexible designs and avoids inheritance hierarchies
+
+7. **Separation of Concerns**:
    - UI components should not contain business logic
    - Business logic should be in services
    - Services should not depend on UI components
+   - Error handling and logging are cross-cutting concerns
 
-2. **Dependency Inversion**:
-   - Higher-level modules (UI) should not depend on implementation details of lower-level modules
-   - Both should depend on abstractions
+8. **Explicit Dependencies**:
+   - Dependencies should be explicitly declared
+   - Services should receive dependencies rather than create them
+   - Configuration should be externalized
 
-3. **Single Responsibility**:
-   - Each class and module should have a single responsibility
-   - Services should focus on specific domains
-
-4. **Testability**:
+9. **Testability**:
    - Code should be designed with testing in mind
    - Use dependency injection to facilitate mocking
    - Avoid tight coupling between components
+   - Interfaces enable easy mocking
 
 ## Future Direction
 
 As projects are added to this repository:
+
 1. Create dedicated modules for each project
 2. Update the navigation system to include new projects
 3. Consider implementing a plugin architecture for more complex projects
-4. Add proper dependency injection for services
-5. Expand the testing framework as needed
+4. Expand the testing framework as needed
+5. Further improve these architectural components:
+   - Add a proper dependency injection container
+   - Implement a service locator pattern
+   - Create a comprehensive event system for inter-service communication
+   - Add a transaction management system for multi-step operations
+   - Implement robust validation frameworks for inputs and outputs
+   - Add more sophisticated caching mechanisms
