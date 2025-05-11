@@ -45,6 +45,8 @@ class TestActuarialService:
         
         # Check the result
         assert result is None
+        mock_r_service.execute_script.assert_not_called()
+        mock_r_service.call_function.assert_not_called()
 
     def test_calculate_mortality_data_success(self, actuarial_service, mock_r_service):
         """Test successful mortality calculation."""
@@ -54,7 +56,7 @@ class TestActuarialService:
         # Mock r_result with a structure similar to what would be returned from R
         mock_r_result = MagicMock()
         mock_r_result.rx2.side_effect = lambda col: [1, 2, 3]  # Return simple list for each column
-        mock_r_service.run_actuarial_mortality.return_value = mock_r_result
+        mock_r_service.call_function.return_value = mock_r_result
         
         # Mock pandas to return a dataframe
         with patch('services.actuarial.actuarial_service.pd') as mock_pd:
@@ -71,7 +73,9 @@ class TestActuarialService:
             
             # Check the result
             assert result == "mortality dataframe"
-            mock_r_service.run_actuarial_mortality.assert_called_once_with(
+            mock_r_service.execute_script.assert_called_once_with("actuarial/mortality.R")
+            mock_r_service.call_function.assert_called_once_with(
+                "calculate_mortality",
                 age_from=30,
                 age_to=90,
                 interest_rate=0.03,
@@ -97,6 +101,8 @@ class TestActuarialService:
         
         # Check the result
         assert result is None
+        mock_r_service.execute_script.assert_not_called()
+        mock_r_service.call_function.assert_not_called()
 
     def test_calculate_present_value_success(self, actuarial_service, mock_r_service):
         """Test successful present value calculation."""
@@ -106,7 +112,7 @@ class TestActuarialService:
         # Mock r_result with a structure similar to what would be returned from R
         mock_r_result = MagicMock()
         mock_r_result.rx2.side_effect = lambda col: [150000] if col == 'present_value' else [15.5] if col == 'expected_duration' else [1250]
-        mock_r_service.run_actuarial_pv.return_value = mock_r_result
+        mock_r_service.call_function.return_value = mock_r_result
         
         # Call the method
         result = actuarial_service.calculate_present_value(
@@ -127,12 +133,14 @@ class TestActuarialService:
         }
         
         # Check that the R service was called with the correct parameters
-        mock_r_service.run_actuarial_pv.assert_called_once()
-        call_args = mock_r_service.run_actuarial_pv.call_args[1]
-        assert call_args['age'] == 65
-        assert call_args['payment'] == 10000
-        assert call_args['interest_rate'] == 0.03
-        assert call_args['term'] == 20
-        assert call_args['freq_factor'] == 1  # Annual
-        assert call_args['table_type'] == "Standard Mortality"
-        assert call_args['gender'] == "male"
+        mock_r_service.execute_script.assert_called_once_with("actuarial/present_value.R")
+        mock_r_service.call_function.assert_called_once_with(
+            "calculate_pv",
+            age=65,
+            payment=10000,
+            interest_rate=0.03,
+            term=20,
+            freq_factor=1,  # Annual
+            table_type="Standard Mortality",
+            gender="male"
+        )

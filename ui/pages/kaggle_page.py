@@ -12,7 +12,7 @@ if importlib.util.find_spec("pandas") is not None:
     import pandas as pd
 else:
     pd = None
-    
+
 # Check for matplotlib
 matplotlib_available = importlib.util.find_spec("matplotlib") is not None
 if matplotlib_available:
@@ -30,8 +30,9 @@ else:
 # Import the base page class
 from ui.pages.base_page import BasePage
 
-# Import Kaggle service
+# Import Kaggle services
 from services.kaggle.kaggle_service import kaggle_service
+from services.kaggle.kaggle_data_manager import kaggle_data_manager
 
 
 class KagglePage(BasePage):
@@ -44,7 +45,8 @@ class KagglePage(BasePage):
         self.current_dataset_ref = None
         self.current_file = None
         self.current_df = None
-        self.temp_dir = tempfile.mkdtemp()
+        # Use the same temp directory as the service
+        self.temp_dir = kaggle_service.temp_dir
         self.setup_ui()
         
     def setup_ui(self):
@@ -526,11 +528,11 @@ class KagglePage(BasePage):
         """Display a pandas DataFrame."""
         # Save the current dataframe
         self.current_df = df
-        
+
         # Clear the DataFrame frame
         for widget in self.df_frame.winfo_children():
             widget.destroy()
-            
+
         if df is None:
             error_label = ttk.Label(
                 self.df_frame,
@@ -539,9 +541,10 @@ class KagglePage(BasePage):
             )
             error_label.pack(expand=True)
             return
-            
-        # Check if pandas is available
-        if pd is None:
+
+        # Check dependencies using the data manager
+        dependencies = kaggle_data_manager.check_dependencies()
+        if not dependencies.get("pandas", False):
             error_label = ttk.Label(
                 self.df_frame,
                 text="Pandas is not available. Please install with: pip install pandas",
@@ -549,51 +552,70 @@ class KagglePage(BasePage):
             )
             error_label.pack(expand=True)
             return
-            
+
+        # Get DataFrame information from the data manager
+        df_info = kaggle_data_manager.get_dataframe_info(df)
+
         # Create a frame for the DataFrame preview
         preview_frame = ttk.Frame(self.df_frame)
         preview_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         # Show DataFrame info
-        info_text = f"Rows: {len(df)}, Columns: {len(df.columns)}"
+        if "error" not in df_info:
+            info_text = f"Rows: {df_info.get('rows', 0)}, Columns: {df_info.get('columns', 0)}"
+            info_text += f" | Memory: {df_info.get('memory_usage', 0):.2f} MB"
+            missing_count = sum(df_info.get('missing_values', {}).values())
+            if missing_count > 0:
+                info_text += f" | Missing values: {missing_count}"
+        else:
+            info_text = f"Rows: {len(df)}, Columns: {len(df.columns)}"
+
         info_label = ttk.Label(preview_frame, text=info_text)
         info_label.pack(anchor=tk.W, pady=(0, 5))
-        
+
         # Create Treeview for DataFrame
         columns = list(df.columns)
         tree = ttk.Treeview(
-            preview_frame, 
+            preview_frame,
             columns=columns,
             show='headings',
             selectmode='browse',
             height=10
         )
-        
+
         # Set column headings
         for col in columns:
             tree.heading(col, text=str(col))
-            # Adjust column width based on data type
-            if pd.api.types.is_numeric_dtype(df[col]):
-                tree.column(col, width=80, anchor='e')
+            # Use column type information from data manager if available
+            if not "error" in df_info and col in df_info.get('dtypes', {}):
+                col_type = df_info['dtypes'][col]
+                if 'int' in col_type or 'float' in col_type:
+                    tree.column(col, width=80, anchor='e')
+                else:
+                    tree.column(col, width=150, anchor='w')
             else:
-                tree.column(col, width=150, anchor='w')
-        
+                # Fallback to direct checking
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    tree.column(col, width=80, anchor='e')
+                else:
+                    tree.column(col, width=150, anchor='w')
+
         # Add data rows (limit to first 1000 rows)
         display_rows = min(1000, len(df))
         for i in range(display_rows):
             values = [str(df.iloc[i][col]) for col in columns]
             tree.insert('', 'end', values=values)
-            
+
         # Add scrollbars
         y_scrollbar = ttk.Scrollbar(preview_frame, orient="vertical", command=tree.yview)
         x_scrollbar = ttk.Scrollbar(preview_frame, orient="horizontal", command=tree.xview)
         tree.configure(yscrollcommand=y_scrollbar.set, xscrollcommand=x_scrollbar.set)
-        
+
         # Pack tree and scrollbars
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         y_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         x_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
-        
+
         # Show visualization options
         self.setup_visualization_options(df)
     
@@ -678,16 +700,16 @@ class KagglePage(BasePage):
         """Generate a visualization based on user selections."""
         if self.current_df is None:
             return
-            
+
         df = self.current_df
         chart_type = self.chart_type_var.get()
         x_col = self.x_var.get()
         y_col = self.y_var.get()
-        
+
         # Clear the plot container
         for widget in self.plot_container.winfo_children():
             widget.destroy()
-            
+
         # Check if matplotlib is available
         if not matplotlib_available or Figure is None:
             error_label = ttk.Label(
@@ -696,135 +718,162 @@ class KagglePage(BasePage):
                 foreground="red"
             )
             error_label.pack(expand=True)
-            
-            # Display data as text instead
+
+            # Use the data manager to get column summary and display it as text
             if pd is not None and df is not None:
                 text_frame = ttk.Frame(self.plot_container)
                 text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-                
+
                 data_text = tk.Text(text_frame, height=20, width=50)
                 data_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-                
+
                 scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=data_text.yview)
                 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
                 data_text.config(yscrollcommand=scrollbar.set)
-                
-                # Display data summary
-                data_text.insert(tk.END, f"Data Summary for: {x_col}\n\n")
-                if pd.api.types.is_numeric_dtype(df[x_col]):
-                    data_text.insert(tk.END, df[x_col].describe().to_string())
+
+                # Get column summary using the data manager
+                summary_result = kaggle_data_manager.get_column_summary(df, x_col)
+                if summary_result.get("success", False):
+                    summary = summary_result["summary"]
+                    data_text.insert(tk.END, f"Data Summary for: {x_col}\n\n")
+
+                    # Format and display the summary
+                    for key, value in summary.items():
+                        if isinstance(value, dict):
+                            data_text.insert(tk.END, f"{key}:\n")
+                            for subkey, subvalue in value.items():
+                                data_text.insert(tk.END, f"  {subkey}: {subvalue}\n")
+                        else:
+                            data_text.insert(tk.END, f"{key}: {value}\n")
                 else:
-                    data_text.insert(tk.END, df[x_col].value_counts().to_string())
+                    data_text.insert(tk.END, f"Error getting summary: {summary_result.get('error', 'Unknown error')}")
+
                 data_text.config(state=tk.DISABLED)
-            
+
             return
-            
+
         try:
+            # Use the data manager to prepare plot data
+            plot_data = kaggle_data_manager.generate_plot_data(
+                df,
+                chart_type,
+                x_col,
+                y_col,
+                bins=30,  # For histogram
+                top_n=20,  # For bar chart
+                sample_size=1000  # For scatter plot
+            )
+
+            # Check for errors
+            if "error" in plot_data:
+                error_label = ttk.Label(
+                    self.plot_container,
+                    text=f"Error: {plot_data['error']}",
+                    foreground="red"
+                )
+                error_label.pack(expand=True)
+                return
+
             # Create figure and axis
             fig = Figure(figsize=(10, 6), dpi=100)
             ax = fig.add_subplot(111)
-            
+
             # Generate plot based on chart type
             if chart_type == 'Histogram':
-                if x_col not in df.columns:
-                    raise ValueError(f"Column '{x_col}' not found in DataFrame")
-                    
-                if not pd.api.types.is_numeric_dtype(df[x_col]):
-                    ax.text(0.5, 0.5, "Histogram requires numeric data", ha='center', va='center', transform=ax.transAxes)
-                else:
-                    ax.hist(df[x_col].dropna(), bins=30, alpha=0.7)
+                if "data" in plot_data:
+                    hist_data = plot_data["data"]
+                    bin_edges = hist_data["bin_edges"]
+                    bin_centers = hist_data["bin_centers"]
+                    counts = hist_data["counts"]
+
+                    # Create histogram
+                    ax.bar(bin_centers, counts, width=(bin_edges[1] - bin_edges[0]), alpha=0.7)
                     ax.set_xlabel(x_col)
                     ax.set_ylabel('Frequency')
                     ax.set_title(f'Histogram of {x_col}')
-                    
+
             elif chart_type == 'Bar Chart':
-                if x_col not in df.columns:
-                    raise ValueError(f"Column '{x_col}' not found in DataFrame")
-                
-                # For categorical data, show value counts
-                if pd.api.types.is_numeric_dtype(df[x_col]):
-                    # For numeric data, bin it first
-                    bins = pd.cut(df[x_col], bins=10)
-                    value_counts = bins.value_counts().sort_index()
-                    ax.bar(range(len(value_counts)), value_counts.values, tick_label=[str(x) for x in value_counts.index])
+                if "data" in plot_data:
+                    bar_data = plot_data["data"]
+                    labels = bar_data["labels"]
+                    values = bar_data["values"]
+
+                    # Create bar chart
+                    ax.bar(range(len(values)), values, tick_label=labels)
                     ax.set_xlabel(x_col)
-                    if plt:
-                        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-                else:
-                    # For categorical data
-                    value_counts = df[x_col].value_counts().sort_index()
-                    ax.bar(range(len(value_counts)), value_counts.values, tick_label=value_counts.index)
-                    ax.set_xlabel(x_col)
-                    if plt:
-                        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-                    
-                ax.set_ylabel('Count')
-                ax.set_title(f'Bar Chart of {x_col}')
-                
-            elif chart_type == 'Scatter Plot':
-                if x_col not in df.columns or y_col not in df.columns:
-                    raise ValueError(f"Columns '{x_col}' or '{y_col}' not found in DataFrame")
-                    
-                if not pd.api.types.is_numeric_dtype(df[x_col]) or not pd.api.types.is_numeric_dtype(df[y_col]):
-                    ax.text(0.5, 0.5, "Scatter plot requires numeric data for both axes", 
-                            ha='center', va='center', transform=ax.transAxes)
-                else:
-                    ax.scatter(df[x_col], df[y_col], alpha=0.5)
-                    ax.set_xlabel(x_col)
-                    ax.set_ylabel(y_col)
-                    ax.set_title(f'Scatter Plot of {y_col} vs {x_col}')
-                    
-            elif chart_type == 'Line Chart':
-                if x_col not in df.columns or y_col not in df.columns:
-                    raise ValueError(f"Columns '{x_col}' or '{y_col}' not found in DataFrame")
-                    
-                if not pd.api.types.is_numeric_dtype(df[y_col]):
-                    ax.text(0.5, 0.5, "Line chart requires numeric data for Y-axis", 
-                            ha='center', va='center', transform=ax.transAxes)
-                else:
-                    # If X is categorical or datetime, sort the data
-                    if pd.api.types.is_numeric_dtype(df[x_col]):
-                        plot_df = df.sort_values(by=x_col)
-                        ax.plot(plot_df[x_col], plot_df[y_col])
-                    else:
-                        # For non-numeric x-axis, treat as categorical
-                        categories = df[x_col].unique()
-                        category_means = [df[df[x_col] == cat][y_col].mean() for cat in categories]
-                        ax.plot(range(len(categories)), category_means, marker='o')
-                        ax.set_xticks(range(len(categories)))
-                        ax.set_xticklabels(categories)
+                    ax.set_ylabel('Count')
+                    ax.set_title(f'Bar Chart of {x_col}')
+
+                    # Rotate labels if many categories
+                    if len(labels) > 5:
                         if plt:
                             plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-                        
+
+            elif chart_type == 'Scatter Plot':
+                if "data" in plot_data:
+                    scatter_data = plot_data["data"]
+                    x_values = scatter_data["x"]
+                    y_values = scatter_data["y"]
+                    correlation = scatter_data.get("correlation", 0)
+
+                    # Create scatter plot
+                    ax.scatter(x_values, y_values, alpha=0.5)
+                    ax.set_xlabel(x_col)
+                    ax.set_ylabel(y_col)
+                    ax.set_title(f'Scatter Plot of {y_col} vs {x_col} (r={correlation:.2f})')
+
+            elif chart_type == 'Line Chart':
+                if "data" in plot_data:
+                    line_data = plot_data["data"]
+                    x_values = line_data["x"]
+                    y_values = line_data["y"]
+                    x_is_numeric = line_data.get("x_is_numeric", True)
+
+                    # Create line chart
+                    if x_is_numeric:
+                        ax.plot(x_values, y_values)
+                    else:
+                        # For categorical x-axis
+                        ax.plot(range(len(x_values)), y_values, marker='o')
+                        ax.set_xticks(range(len(x_values)))
+                        ax.set_xticklabels(x_values)
+                        if plt:
+                            plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+
                     ax.set_xlabel(x_col)
                     ax.set_ylabel(y_col)
                     ax.set_title(f'Line Chart of {y_col} by {x_col}')
-                    
+
             elif chart_type == 'Box Plot':
-                if x_col not in df.columns:
-                    raise ValueError(f"Column '{x_col}' not found in DataFrame")
-                    
-                if not pd.api.types.is_numeric_dtype(df[x_col]):
-                    ax.text(0.5, 0.5, "Box plot requires numeric data", 
-                            ha='center', va='center', transform=ax.transAxes)
-                else:
-                    ax.boxplot(df[x_col].dropna())
+                if "data" in plot_data:
+                    box_data = plot_data["data"]
+
+                    # Create boxplot manually since we have the statistics
+                    box_stats = {
+                        'medians': [box_data["median"]],
+                        'q1': [box_data["q1"]],
+                        'q3': [box_data["q3"]],
+                        'whislo': [box_data["whisker_low"]],
+                        'whishi': [box_data["whisker_high"]],
+                        'fliers': [box_data["outliers"]]
+                    }
+                    ax.bxp([box_stats], showfliers=True)
                     ax.set_ylabel(x_col)
                     ax.set_title(f'Box Plot of {x_col}')
                     ax.set_xticks([1])
                     ax.set_xticklabels([x_col])
-            
+
             # Set grid
             ax.grid(True, linestyle='--', alpha=0.7)
-            
+
             # Tight layout
             fig.tight_layout()
-            
+
             # Create canvas
             canvas = FigureCanvasTkAgg(fig, master=self.plot_container)
             canvas.draw()
             canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-            
+
         except Exception as e:
             error_label = ttk.Label(
                 self.plot_container,
@@ -838,7 +887,7 @@ class KagglePage(BasePage):
         if self.current_df is None:
             messagebox.showerror("Error", "No data to export.")
             return
-            
+
         # Ask for filename
         file_path = filedialog.asksaveasfilename(
             defaultextension=".csv",
@@ -849,23 +898,25 @@ class KagglePage(BasePage):
                 ("All files", "*.*")
             ]
         )
-        
+
         if not file_path:
             return
-            
-        try:
-            # Export based on file extension
-            if file_path.lower().endswith('.csv'):
-                self.current_df.to_csv(file_path, index=False)
-            elif file_path.lower().endswith('.xlsx'):
-                self.current_df.to_excel(file_path, index=False)
-            elif file_path.lower().endswith('.json'):
-                self.current_df.to_json(file_path, orient='records')
-            else:
-                # Default to CSV
-                self.current_df.to_csv(file_path, index=False)
-                
-            messagebox.showinfo("Success", f"Data exported successfully to {file_path}")
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to export data: {str(e)}")
+
+        # Use the data manager to export the data
+        result = kaggle_data_manager.export_dataframe(self.current_df, file_path)
+
+        if result.get("success", False):
+            # Show success message with details
+            rows = result.get("rows", 0)
+            columns = result.get("columns", 0)
+            format = result.get("format", "unknown")
+            messagebox.showinfo(
+                "Success",
+                f"Data exported successfully to {file_path}\n"
+                f"Format: {format}\n"
+                f"Rows: {rows}, Columns: {columns}"
+            )
+        else:
+            # Show error message
+            error_msg = result.get("error", "Unknown error")
+            messagebox.showerror("Error", f"Failed to export data: {error_msg}")

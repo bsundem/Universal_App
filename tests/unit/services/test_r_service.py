@@ -115,3 +115,12 @@ class TestRService:
         
         # Check the result
         assert result == "R result"
+        
+    def test_get_script_path(self, r_service):
+        """Test getting the path to an R script."""
+        # Call the method
+        path = r_service.get_script_path("test.R")
+        
+        # Check the result
+        assert "r_scripts" in path
+        assert path.endswith("test.R")

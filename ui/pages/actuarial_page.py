@@ -33,8 +33,9 @@ else:
 # Import the base page class
 from ui.pages.base_page import BasePage
 
-# Import actuarial service and R service
+# Import actuarial services and R service
 from services.actuarial.actuarial_service import actuarial_service
+from services.actuarial.actuarial_data_manager import actuarial_data_manager
 from services.r_service import r_service
 
 
@@ -340,7 +341,7 @@ class ActuarialPage(BasePage):
             )
             message.pack(expand=True)
 
-            # Display data as text instead
+            # Display data as text instead using the data manager
             text_frame = ttk.Frame(self.plot_frame)
             text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
 
@@ -351,49 +352,152 @@ class ActuarialPage(BasePage):
             scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
             data_text.config(yscrollcommand=scrollbar.set)
 
-            # Insert dataframe as text
-            data_text.insert(tk.END, "Mortality Data:\n\n")
-            data_text.insert(tk.END, df.to_string())
+            try:
+                # Use the data manager to get formatted text
+                text_data = actuarial_data_manager.get_mortality_data_as_text(df)
+                data_text.insert(tk.END, text_data)
+            except Exception as e:
+                data_text.insert(tk.END, f"Error formatting data: {str(e)}")
+
             data_text.config(state=tk.DISABLED)
             return
 
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 7), gridspec_kw={'height_ratios': [1, 1]})
+        try:
+            # Use the data manager to prepare data for visualization
+            visualization_data = actuarial_data_manager.prepare_mortality_data_for_visualization(df)
 
-        # Plot mortality rates
-        ax1.plot(df['Age'], df['qx'], 'b-', label='Mortality Rate (qx)')
-        ax1.set_title('Mortality Rates by Age')
-        ax1.set_xlabel('Age')
-        ax1.set_ylabel('Rate')
-        ax1.legend()
-        ax1.grid(True, linestyle='--', alpha=0.7)
+            # Use the data manager to create the figure
+            fig = actuarial_data_manager.create_mortality_visualization(visualization_data)
 
-        # Plot life expectancy
-        ax2.plot(df['Age'], df['ex'], 'r-', label='Life Expectancy (ex)')
-        ax2.set_title('Life Expectancy by Age')
-        ax2.set_xlabel('Age')
-        ax2.set_ylabel('Years')
-        ax2.legend()
-        ax2.grid(True, linestyle='--', alpha=0.7)
-
-        plt.tight_layout()
-
-        canvas = FigureCanvasTkAgg(fig, self.plot_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            if fig:
+                # Create canvas for the figure
+                canvas = FigureCanvasTkAgg(fig, self.plot_frame)
+                canvas.draw()
+                canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            else:
+                # If visualization creation failed
+                message = ttk.Label(
+                    self.plot_frame,
+                    text="Failed to create visualization.",
+                    foreground="red"
+                )
+                message.pack(expand=True)
+        except Exception as e:
+            # Handle errors
+            error_message = ttk.Label(
+                self.plot_frame,
+                text=f"Error creating visualization: {str(e)}",
+                foreground="red"
+            )
+            error_message.pack(expand=True)
         
     def export_mortality_data(self):
-        """Export mortality data to CSV."""
-        messagebox.showinfo(
-            "Export Data", 
-            "Export functionality not implemented in this demo."
-        )
+        """Export mortality data to CSV, Excel or JSON."""
+        # Get the current mortality data
+        try:
+            # Get input values
+            age_from = int(self.age_from.get())
+            age_to = int(self.age_to.get())
+            interest_rate = float(self.interest_rate.get()) / 100
+            table_type = self.mortality_table.get()
+            gender = self.gender.get().lower()
+
+            # Use the actuarial service to calculate mortality data
+            mortality_df = actuarial_service.calculate_mortality_data(
+                age_from,
+                age_to,
+                interest_rate,
+                table_type,
+                gender
+            )
+
+            if mortality_df is None:
+                messagebox.showerror("Error", "No data to export. Please calculate first.")
+                return
+
+            # Ask user for file format
+            format_dialog = tk.Toplevel(self)
+            format_dialog.title("Export Format")
+            format_dialog.geometry("300x200")
+            format_dialog.resizable(False, False)
+            format_dialog.transient(self)  # Set as transient to main window
+            format_dialog.grab_set()  # Modal dialog
+
+            # Center the dialog
+            format_dialog.update_idletasks()
+            width = format_dialog.winfo_width()
+            height = format_dialog.winfo_height()
+            x = (format_dialog.winfo_screenwidth() // 2) - (width // 2)
+            y = (format_dialog.winfo_screenheight() // 2) - (height // 2)
+            format_dialog.geometry(f"+{x}+{y}")
+
+            # Add format selection
+            ttk.Label(format_dialog, text="Select export format:").pack(pady=10)
+
+            format_var = tk.StringVar(value="csv")
+            ttk.Radiobutton(format_dialog, text="CSV", variable=format_var, value="csv").pack(anchor=tk.W, padx=20)
+            ttk.Radiobutton(format_dialog, text="Excel", variable=format_var, value="excel").pack(anchor=tk.W, padx=20)
+            ttk.Radiobutton(format_dialog, text="JSON", variable=format_var, value="json").pack(anchor=tk.W, padx=20)
+
+            def on_export():
+                export_format = format_var.get()
+                format_dialog.destroy()
+
+                try:
+                    file_formats = {
+                        "csv": (".csv", "CSV files"),
+                        "excel": (".xlsx", "Excel files"),
+                        "json": (".json", "JSON files")
+                    }
+
+                    file_ext, file_type = file_formats.get(export_format, (".csv", "CSV files"))
+
+                    # Ask for save location
+                    filename = table_type.replace(" ", "_").lower() + "_mortality_data" + file_ext
+                    file_path = filedialog.asksaveasfilename(
+                        defaultextension=file_ext,
+                        filetypes=[(file_type, f"*{file_ext}"), ("All files", "*.*")],
+                        initialfile=filename
+                    )
+
+                    if not file_path:
+                        return
+
+                    # Use the data manager to export the data
+                    if export_format == "csv":
+                        actuarial_data_manager.export_mortality_data_to_csv(mortality_df, file_path)
+                    elif export_format == "excel":
+                        actuarial_data_manager.export_mortality_data_to_excel(mortality_df, file_path)
+                    elif export_format == "json":
+                        actuarial_data_manager.export_mortality_data_to_json(mortality_df, file_path)
+
+                    messagebox.showinfo(
+                        "Export Complete",
+                        f"Data successfully exported to {file_path}"
+                    )
+
+                except Exception as e:
+                    messagebox.showerror(
+                        "Export Error",
+                        f"Failed to export data: {str(e)}"
+                    )
+
+            # Add buttons
+            button_frame = ttk.Frame(format_dialog)
+            button_frame.pack(side=tk.BOTTOM, pady=20)
+
+            ttk.Button(button_frame, text="Export", command=on_export).pack(side=tk.LEFT, padx=10)
+            ttk.Button(button_frame, text="Cancel", command=format_dialog.destroy).pack(side=tk.LEFT, padx=10)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export data: {str(e)}")
         
     def calculate_present_value(self):
         """Calculate present value of an annuity."""
         if not r_service.is_available():
             messagebox.showerror("Error", "R integration is not available.")
             return
-            
+
         try:
             # Get input values
             age = int(self.pv_age.get())
@@ -403,50 +507,45 @@ class ActuarialPage(BasePage):
             frequency = self.frequency.get()
             table_type = self.pv_mortality_table.get()
             gender = self.pv_gender.get().lower()
-            
-            # Determine payment frequency factor
-            freq_map = {"Annual": 1, "Semi-annual": 2, "Quarterly": 4, "Monthly": 12}
-            freq_factor = freq_map.get(frequency, 1)
-            
+
             # Use the actuarial service to calculate present value
             pv_results = actuarial_service.calculate_present_value(
                 age,
                 payment,
                 interest_rate,
                 term,
-                frequency,  # pass the frequency name
+                frequency,
                 table_type,
                 gender
             )
-            
+
             if pv_results is None:
                 messagebox.showerror("Error", "Failed to calculate present value.")
                 return
-                
-            # Extract results
-            pv = pv_results.get('present_value')
-            duration = pv_results.get('expected_duration')
-            monthly = pv_results.get('monthly_equivalent')
-            
+
+            # Use the data manager to prepare display data
+            params = {
+                'age': age,
+                'payment': payment,
+                'interest_rate': interest_rate,
+                'term': term,
+                'frequency': frequency,
+                'table_type': table_type,
+                'gender': gender
+            }
+
+            formatted_results = actuarial_data_manager.prepare_pv_data_for_visualization(pv_results, params)
+
             # Update result labels
-            self.pv_result.config(text=f"${pv:,.2f}")
-            self.duration_result.config(text=f"{duration:.2f} years")
-            self.monthly_result.config(text=f"${monthly:,.2f} / month")
-            
+            self.pv_result.config(text=formatted_results['present_value'])
+            self.duration_result.config(text=formatted_results['expected_duration'])
+            self.monthly_result.config(text=formatted_results['monthly_equivalent'])
+
             # Update info text
             self.info_text.config(state=tk.NORMAL)
             self.info_text.delete(1.0, tk.END)
-            
-            info = (f"Present Value: ${pv:,.2f}\n\n"
-                   f"This represents the lump sum amount needed today to fund "
-                   f"the specified stream of payments.\n\n"
-                   f"Based on a {frequency.lower()} payment of ${payment:,.2f} "
-                   f"for {term} years or life, using an interest rate of "
-                   f"{interest_rate*100:.2f}%.\n\n"
-                   f"The expected duration of payments is {duration:.2f} years.")
-                   
-            self.info_text.insert(tk.END, info)
+            self.info_text.insert(tk.END, formatted_results['summary'])
             self.info_text.config(state=tk.DISABLED)
-            
+
         except Exception as e:
             messagebox.showerror("Error", f"Failed to calculate present value: {str(e)}")

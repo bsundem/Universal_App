@@ -30,6 +30,10 @@ class ActuarialService:
         """Initialize the actuarial service."""
         self.temp_dir = tempfile.mkdtemp()
         self.r_scripts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'r_scripts')
+        
+        # Paths to R scripts
+        self.mortality_script_path = "actuarial/mortality.R"
+        self.present_value_script_path = "actuarial/present_value.R"
 
     def is_r_available(self) -> bool:
         """
@@ -60,8 +64,12 @@ class ActuarialService:
             return None
             
         try:
-            # Use the R service to run mortality calculations
-            r_result = r_service.run_actuarial_mortality(
+            # Execute the R script
+            r_service.execute_script(self.mortality_script_path)
+            
+            # Call the calculate_mortality function with the provided parameters
+            r_result = r_service.call_function(
+                "calculate_mortality",
                 age_from=age_from,
                 age_to=age_to,
                 interest_rate=interest_rate,
@@ -114,8 +122,12 @@ class ActuarialService:
             freq_map = {"Annual": 1, "Semi-annual": 2, "Quarterly": 4, "Monthly": 12}
             freq_factor = freq_map.get(frequency, 1)
             
-            # Use the R service to run present value calculations
-            r_result = r_service.run_actuarial_pv(
+            # Execute the R script
+            r_service.execute_script(self.present_value_script_path)
+            
+            # Call the calculate_pv function with the provided parameters
+            r_result = r_service.call_function(
+                "calculate_pv",
                 age=age,
                 payment=payment,
                 interest_rate=interest_rate,

@@ -172,69 +172,17 @@ class RService:
             print(f"Error calling R function '{function_name}': {str(e)}")
             return None
     
-    def run_actuarial_mortality(self, age_from: int, age_to: int, 
-                              interest_rate: float, table_type: str, 
-                              gender: str) -> Any:
+    def get_script_path(self, script_path: str) -> str:
         """
-        Run the mortality calculation R function from the actuarial package.
+        Get the full path to an R script.
         
         Args:
-            age_from (int): Starting age
-            age_to (int): Ending age
-            interest_rate (float): Annual interest rate as a decimal (e.g., 0.035)
-            table_type (str): Type of mortality table to use
-            gender (str): Gender to use (male, female, unisex)
+            script_path (str): Path to the R script, relative to the r_scripts directory
             
         Returns:
-            Any: R data frame with mortality data
+            str: Full path to the R script
         """
-        # Source the mortality script
-        script_path = "actuarial/mortality.R"
-        self.execute_script(script_path)
-        
-        # Call the calculate_mortality function
-        return self.call_function(
-            "calculate_mortality",
-            age_from=age_from,
-            age_to=age_to,
-            interest_rate=interest_rate,
-            table_type=table_type,
-            gender=gender
-        )
-    
-    def run_actuarial_pv(self, age: int, payment: float, interest_rate: float,
-                        term: int, freq_factor: int, table_type: str, 
-                        gender: str) -> Any:
-        """
-        Run the present value calculation R function from the actuarial package.
-        
-        Args:
-            age (int): Age of the annuitant
-            payment (float): Annual payment amount
-            interest_rate (float): Annual interest rate as a decimal
-            term (int): Term of the annuity in years
-            freq_factor (int): Payment frequency factor (1=annual, 2=semi-annual, etc.)
-            table_type (str): Type of mortality table to use
-            gender (str): Gender to use (male, female, unisex)
-            
-        Returns:
-            Any: R list with present value calculation results
-        """
-        # Source the present value script
-        script_path = "actuarial/present_value.R"
-        self.execute_script(script_path)
-        
-        # Call the calculate_pv function
-        return self.call_function(
-            "calculate_pv",
-            age=age,
-            payment=payment,
-            interest_rate=interest_rate,
-            term=term,
-            freq_factor=freq_factor,
-            table_type=table_type,
-            gender=gender
-        )
+        return os.path.join(self.scripts_dir, script_path)
 
 
 # Export a singleton instance that can be imported directly
