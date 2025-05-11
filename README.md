@@ -146,6 +146,21 @@ python run.py
 universal-app
 ```
 
+### Checking Dependencies
+
+You can check which dependencies are installed and which features are available:
+
+```bash
+# Check all dependencies
+universal-app-check-deps
+
+# Show only missing dependencies
+universal-app-check-deps --missing
+
+# Validate only core dependencies
+universal-app-check-deps --validate
+```
+
 ## Development
 
 ### Adding New Projects
