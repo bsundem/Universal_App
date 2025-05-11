@@ -2,10 +2,11 @@
 Actuarial calculations page with R integration.
 """
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import os
 import tempfile
 import importlib.util
+from utils.logging import get_logger
 
 # Check for numpy
 if importlib.util.find_spec("numpy") is not None:
@@ -30,22 +31,24 @@ else:
     plt = None
     FigureCanvasTkAgg = None
 
-# Import the base page class
-from ui.pages.base_page import BasePage
+# Import the ContentPage class
+from ui.pages.content_page import ContentPage
 
-# Import actuarial services and R service
-from services.actuarial.actuarial_service import actuarial_service
-from services.actuarial.actuarial_data_manager import actuarial_data_manager
-from services.r_service import r_service
+# Import service interfaces and provider
+from services.provider import get_r_service, get_actuarial_service, get_actuarial_data_manager
 
 
-class ActuarialPage(BasePage):
+# Initialize logger
+logger = get_logger(__name__)
+
+
+class ActuarialPage(ContentPage):
     """Page for actuarial calculations using R integration."""
-    
+
     def __init__(self, parent, controller):
         super().__init__(parent, title="Actuarial Calculations")
         self.controller = controller
-        self.setup_ui()
+        logger.info("ActuarialPage initialized")
         
     def setup_ui(self):
         """Set up the UI components for the actuarial page."""
@@ -59,11 +62,12 @@ class ActuarialPage(BasePage):
         header.pack(pady=(0, 10))
         
         # Check if R is available
+        r_service = get_r_service()
         if not r_service.is_available():
             error_frame = ttk.Frame(main_frame, padding="20")
             error_frame.pack(fill=tk.BOTH, expand=True)
             error_msg = ttk.Label(
-                error_frame, 
+                error_frame,
                 text="R integration is not available.\nPlease install R and rpy2 package.",
                 font=("Helvetica", 12),
                 foreground="red"
@@ -297,10 +301,11 @@ class ActuarialPage(BasePage):
         
     def calculate_mortality(self):
         """Calculate mortality data using R and display results."""
+        r_service = get_r_service()
         if not r_service.is_available():
             messagebox.showerror("Error", "R integration is not available.")
             return
-            
+
         try:
             # Get input values
             age_from = int(self.age_from.get())
@@ -308,13 +313,16 @@ class ActuarialPage(BasePage):
             interest_rate = float(self.interest_rate.get()) / 100
             table_type = self.mortality_table.get()
             gender = self.gender.get().lower()
-            
+
+            # Get the actuarial service from the provider
+            actuarial_service = get_actuarial_service()
+
             # Use the actuarial service to calculate mortality data
             mortality_df = actuarial_service.calculate_mortality_data(
-                age_from, 
-                age_to, 
-                interest_rate, 
-                table_type, 
+                age_from,
+                age_to,
+                interest_rate,
+                table_type,
                 gender
             )
             
@@ -353,8 +361,9 @@ class ActuarialPage(BasePage):
             data_text.config(yscrollcommand=scrollbar.set)
 
             try:
-                # Use the data manager to get formatted text
-                text_data = actuarial_data_manager.get_mortality_data_as_text(df)
+                # Get the data manager and use it to format text
+                data_manager = get_actuarial_data_manager()
+                text_data = data_manager.get_mortality_data_as_text(df)
                 data_text.insert(tk.END, text_data)
             except Exception as e:
                 data_text.insert(tk.END, f"Error formatting data: {str(e)}")
@@ -363,11 +372,14 @@ class ActuarialPage(BasePage):
             return
 
         try:
+            # Get the data manager
+            data_manager = get_actuarial_data_manager()
+
             # Use the data manager to prepare data for visualization
-            visualization_data = actuarial_data_manager.prepare_mortality_data_for_visualization(df)
+            visualization_data = data_manager.prepare_mortality_data_for_visualization(df)
 
             # Use the data manager to create the figure
-            fig = actuarial_data_manager.create_mortality_visualization(visualization_data)
+            fig = data_manager.create_mortality_visualization(visualization_data)
 
             if fig:
                 # Create canvas for the figure
@@ -401,6 +413,9 @@ class ActuarialPage(BasePage):
             interest_rate = float(self.interest_rate.get()) / 100
             table_type = self.mortality_table.get()
             gender = self.gender.get().lower()
+
+            # Get the actuarial service
+            actuarial_service = get_actuarial_service()
 
             # Use the actuarial service to calculate mortality data
             mortality_df = actuarial_service.calculate_mortality_data(
@@ -463,13 +478,16 @@ class ActuarialPage(BasePage):
                     if not file_path:
                         return
 
+                    # Get the data manager
+                    data_manager = get_actuarial_data_manager()
+
                     # Use the data manager to export the data
                     if export_format == "csv":
-                        actuarial_data_manager.export_mortality_data_to_csv(mortality_df, file_path)
+                        data_manager.export_mortality_data_to_csv(mortality_df, file_path)
                     elif export_format == "excel":
-                        actuarial_data_manager.export_mortality_data_to_excel(mortality_df, file_path)
+                        data_manager.export_mortality_data_to_excel(mortality_df, file_path)
                     elif export_format == "json":
-                        actuarial_data_manager.export_mortality_data_to_json(mortality_df, file_path)
+                        data_manager.export_mortality_data_to_json(mortality_df, file_path)
 
                     messagebox.showinfo(
                         "Export Complete",
@@ -494,6 +512,7 @@ class ActuarialPage(BasePage):
         
     def calculate_present_value(self):
         """Calculate present value of an annuity."""
+        r_service = get_r_service()
         if not r_service.is_available():
             messagebox.showerror("Error", "R integration is not available.")
             return
@@ -507,6 +526,9 @@ class ActuarialPage(BasePage):
             frequency = self.frequency.get()
             table_type = self.pv_mortality_table.get()
             gender = self.pv_gender.get().lower()
+
+            # Get the actuarial service
+            actuarial_service = get_actuarial_service()
 
             # Use the actuarial service to calculate present value
             pv_results = actuarial_service.calculate_present_value(
@@ -523,6 +545,9 @@ class ActuarialPage(BasePage):
                 messagebox.showerror("Error", "Failed to calculate present value.")
                 return
 
+            # Get the data manager
+            data_manager = get_actuarial_data_manager()
+
             # Use the data manager to prepare display data
             params = {
                 'age': age,
@@ -534,7 +559,7 @@ class ActuarialPage(BasePage):
                 'gender': gender
             }
 
-            formatted_results = actuarial_data_manager.prepare_pv_data_for_visualization(pv_results, params)
+            formatted_results = data_manager.prepare_pv_data_for_visualization(pv_results, params)
 
             # Update result labels
             self.pv_result.config(text=formatted_results['present_value'])

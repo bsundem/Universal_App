@@ -27,17 +27,22 @@ else:
     FigureCanvasTkAgg = None
     Figure = None
 
-# Import the base page class
-from ui.pages.base_page import BasePage
+# Import the content page class
+from ui.pages.content_page import ContentPage
+from utils.logging import get_logger
 
 # Import Kaggle services
 from services.kaggle.kaggle_service import kaggle_service
 from services.kaggle.kaggle_data_manager import kaggle_data_manager
 
 
-class KagglePage(BasePage):
+# Get logger for this module
+logger = get_logger(__name__)
+
+
+class KagglePage(ContentPage):
     """Page for fetching and visualizing data from Kaggle."""
-    
+
     def __init__(self, parent, controller):
         super().__init__(parent, title="Kaggle Data Explorer")
         self.controller = controller
@@ -47,7 +52,7 @@ class KagglePage(BasePage):
         self.current_df = None
         # Use the same temp directory as the service
         self.temp_dir = kaggle_service.temp_dir
-        self.setup_ui()
+        logger.info("KagglePage initialized")
         
     def setup_ui(self):
         """Set up the UI components for the Kaggle page."""
@@ -367,28 +372,31 @@ class KagglePage(BasePage):
     def search_datasets(self):
         """Search for Kaggle datasets based on user input."""
         search_term = self.search_var.get().strip()
-        
+        logger.info(f"Searching for Kaggle datasets with term: '{search_term}'")
+
         # Get filter values
         max_size_str = self.max_size_var.get().strip()
         try:
             max_size = int(max_size_str) if max_size_str else None
         except ValueError:
             max_size = 100  # Default to 100 MB
-            
+
         max_results_str = self.max_results_var.get().strip()
         try:
             max_results = int(max_results_str) if max_results_str else 20
         except ValueError:
             max_results = 20  # Default to 20 results
-            
+
         file_type = self.file_type_var.get()
         if file_type == 'Any':
             file_type = None
-            
+
+        logger.debug(f"Search filters - Max size: {max_size}MB, Results limit: {max_results}, File type: {file_type or 'Any'}")
+
         # Clear existing items in treeview
         for item in self.dataset_tree.get_children():
             self.dataset_tree.delete(item)
-            
+
         # Show loading message
         loading_item = self.dataset_tree.insert('', 'end', text='Loading...', values=('', ''))
         self.update_idletasks()
@@ -432,28 +440,41 @@ class KagglePage(BasePage):
         selected_items = self.dataset_tree.selection()
         if not selected_items:
             return
-            
+
         # Get the selected dataset
         item_id = selected_items[0]
         self.current_dataset = self.datasets.get(item_id)
-        
+
         if not self.current_dataset:
             return
-            
+
         self.current_dataset_ref = self.current_dataset.get('ref')
-        
+        logger.info(f"Dataset selected: {self.current_dataset.get('title')}")
+
         # Update the UI with the selected dataset
         self.setup_dataset_viewer()
     
+    def show(self):
+        """Show the Kaggle page."""
+        super().show()
+        logger.debug("KagglePage shown")
+
+    def hide(self):
+        """Hide the Kaggle page."""
+        super().hide()
+        logger.debug("KagglePage hidden")
+
     def load_dataset_files(self):
         """Load and display files for the selected dataset."""
         if not self.current_dataset_ref:
             return
-            
+
+        logger.info(f"Loading files for dataset: {self.current_dataset.get('title')}")
+
         # Clear existing items in files treeview
         for item in self.files_tree.get_children():
             self.files_tree.delete(item)
-            
+
         # Show loading message
         loading_item = self.files_tree.insert('', 'end', text='Loading...', values=(''))
         self.update_idletasks()
@@ -491,18 +512,20 @@ class KagglePage(BasePage):
         selected_items = self.files_tree.selection()
         if not selected_items:
             return
-            
+
         # Get the selected file
         item_id = selected_items[0]
         self.current_file = self.files.get(item_id)
-        
+
         if not self.current_file or not self.current_dataset_ref:
             return
-            
+
         # Get the filename
         filename = self.current_file.get('name')
         if not filename:
             return
+
+        logger.info(f"File selected: {filename} from dataset: {self.current_dataset.get('title')}")
             
         # Show loading indicator in DataFrame frame
         for widget in self.df_frame.winfo_children():
@@ -699,12 +722,15 @@ class KagglePage(BasePage):
     def generate_plot(self):
         """Generate a visualization based on user selections."""
         if self.current_df is None:
+            logger.warning("Cannot generate plot: No dataframe loaded")
             return
 
         df = self.current_df
         chart_type = self.chart_type_var.get()
         x_col = self.x_var.get()
         y_col = self.y_var.get()
+
+        logger.info(f"Generating {chart_type} with x={x_col}, y={y_col}")
 
         # Clear the plot container
         for widget in self.plot_container.winfo_children():
@@ -885,6 +911,7 @@ class KagglePage(BasePage):
     def export_data(self):
         """Export the current DataFrame to a file."""
         if self.current_df is None:
+            logger.warning("Cannot export data: No dataframe loaded")
             messagebox.showerror("Error", "No data to export.")
             return
 
@@ -900,7 +927,10 @@ class KagglePage(BasePage):
         )
 
         if not file_path:
+            logger.debug("Export cancelled by user")
             return
+
+        logger.info(f"Exporting data to: {file_path}")
 
         # Use the data manager to export the data
         result = kaggle_data_manager.export_dataframe(self.current_df, file_path)

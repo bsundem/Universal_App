@@ -1,5 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 class Sidebar:
     """Main navigation sidebar component using Tkinter."""
@@ -54,11 +57,14 @@ class Sidebar:
             {"name": "Actuarial Tools", "id": 1},
             {"name": "Kaggle Explorer", "id": 2},
             {"name": "Project Three", "id": 3},
-            {"name": "Settings", "id": 4}
+            {"name": "Example Page", "id": 4},  # New example page using composition
+            {"name": "Settings", "id": 5}
         ]
 
         # Variable to track the selected button
         self.selected_btn = tk.IntVar(value=0)
+
+        logger.debug(f"Setting up navigation with {len(nav_items)} items")
 
         for item in nav_items:
             # Create a custom styled button for each nav item
@@ -75,6 +81,8 @@ class Sidebar:
     
     def _handle_nav_click(self, index):
         """Handle navigation button clicks."""
+        logger.debug(f"Navigation button clicked with index {index}")
+
         # Call the callback function if it exists
         if self.on_page_changed:
             self.on_page_changed(index)

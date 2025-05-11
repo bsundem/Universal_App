@@ -80,12 +80,9 @@ The application follows a clean architecture pattern with clear separation of co
    - `Sidebar`: Navigation component (in `ui/components/sidebar.py`)
      - Left sidebar with navigation buttons for different projects/sections
      - Uses callback to notify when navigation items are selected
-   - Page System (two approaches available):
-     - Inheritance approach:
-       - `BasePage`: Base class for all pages (in `ui/pages/base_page.py`)
-     - Composition approach (preferred):
-       - `PageContainer`: Component for page layout (in `ui/components/page_container.py`)
-       - `ContentPage`: Uses composition to create pages (in `ui/pages/content_page.py`)
+   - Page System (using composition):
+     - `PageContainer`: Component for page layout (in `ui/components/page_container.py`)
+     - `ContentPage`: Uses composition to create pages (in `ui/pages/content_page.py`)
      - Pages are shown/hidden based on navigation
 
 2. **Service Layer**:
@@ -123,8 +120,8 @@ The application follows a clean architecture pattern with clear separation of co
 To add a new project module to the application:
 
 1. Create a new page class in `ui/pages/`:
-   - Use `ContentPage` as the base class (preferred composition approach)
-   - Or inherit from `BasePage` (legacy inheritance approach)
+   - Use `ContentPage` as the base class (using composition)
+   - **Do not** use `BasePage` which is deprecated
 2. Create interfaces for your services in `services/interfaces/`
 3. Implement the service interfaces in the `services/` directory
 4. Use error handling and logging utilities in your services and pages
@@ -132,6 +129,8 @@ To add a new project module to the application:
 6. Add the page to the `MainWindow.setup_pages()` method in `ui/main_window.py`
 7. Add a navigation button in the `Sidebar._setup_navigation()` method in `ui/components/sidebar.py`
 8. Add appropriate tests in the `tests/` directory
+
+For an example of creating a page using composition, refer to `ui/pages/example_page.py`.
 
 ## Development Workflow
 

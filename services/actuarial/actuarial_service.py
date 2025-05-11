@@ -20,29 +20,40 @@ except ImportError:
     pd = None
 
 # Import the R service
-from services.r_service import r_service
+from services.interfaces.r_service import RServiceInterface
 
 
 class ActuarialService:
     """Service for actuarial calculations using R integration."""
-    
+
     def __init__(self):
         """Initialize the actuarial service."""
         self.temp_dir = tempfile.mkdtemp()
         self.r_scripts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'r_scripts')
-        
+
         # Paths to R scripts
         self.mortality_script_path = "actuarial/mortality.R"
         self.present_value_script_path = "actuarial/present_value.R"
 
+        # R service will be retrieved from provider when needed
+        self._r_service = None
+
+    def _get_r_service(self) -> RServiceInterface:
+        """Get the R service from the provider."""
+        if self._r_service is None:
+            # Import here to avoid circular imports
+            from services.provider import get_r_service
+            self._r_service = get_r_service()
+        return self._r_service
+
     def is_r_available(self) -> bool:
         """
         Check if R integration is available.
-        
+
         Returns:
             bool: True if R is available, False otherwise
         """
-        return r_service.is_available()
+        return self._get_r_service().is_available()
         
     def calculate_mortality_data(self, age_from: int, age_to: int, 
                                 interest_rate: float, table_type: str, 
@@ -64,9 +75,11 @@ class ActuarialService:
             return None
             
         try:
+            r_service = self._get_r_service()
+
             # Execute the R script
             r_service.execute_script(self.mortality_script_path)
-            
+
             # Call the calculate_mortality function with the provided parameters
             r_result = r_service.call_function(
                 "calculate_mortality",
@@ -122,9 +135,11 @@ class ActuarialService:
             freq_map = {"Annual": 1, "Semi-annual": 2, "Quarterly": 4, "Monthly": 12}
             freq_factor = freq_map.get(frequency, 1)
             
+            r_service = self._get_r_service()
+
             # Execute the R script
             r_service.execute_script(self.present_value_script_path)
-            
+
             # Call the calculate_pv function with the provided parameters
             r_result = r_service.call_function(
                 "calculate_pv",

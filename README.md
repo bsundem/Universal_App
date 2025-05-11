@@ -28,6 +28,7 @@ Universal_App/
 │   ├── actuarial/           # Actuarial calculation services
 │   ├── interfaces/          # Service interfaces (ISP)
 │   ├── kaggle/              # Kaggle data services
+│   ├── provider.py          # Service provider (DIP)
 │   └── r_service.py         # R integration service
 ├── r_scripts/               # R scripts for specialized calculations
 │   ├── actuarial/           # Actuarial R scripts
@@ -40,8 +41,12 @@ Universal_App/
 │   ├── components/          # Reusable UI components
 │   │   └── page_container.py # Page container (composition)
 │   └── pages/               # Application pages
-│       ├── base_page.py     # Legacy base page (inheritance)
-│       └── content_page.py  # New content page (composition)
+│       ├── content_page.py  # Base content page using composition
+│       ├── home_page.py     # Home page
+│       ├── kaggle_page.py   # Kaggle data explorer page
+│       ├── actuarial_page.py # Actuarial calculations page
+│       ├── settings_page.py # Settings page
+│       └── example_page.py  # Example page demonstrating composition
 └── utils/                   # Utility functions and helpers
     ├── error_handling.py    # Standardized error handling
     └── logging.py           # Logging strategy
@@ -99,11 +104,13 @@ universal-app
 
 To add a new project module to the application:
 
-1. Create a new page in `ui/pages/` (inherit from `ContentPage` for composition or `BasePage` for inheritance)
+1. Create a new page in `ui/pages/` using the `ContentPage` class as the base
 2. Add any required business logic in the `services/` directory
 3. Create interfaces for your services in `services/interfaces/`
 4. Add the page to the `MainWindow.setup_pages()` method in `ui/main_window.py`
 5. Add a navigation button in the `Sidebar._setup_navigation()` method in `ui/components/sidebar.py`
+
+The application exclusively uses the composition pattern for page creation, which provides better flexibility and testability than inheritance.
 
 ### Services Architecture
 
@@ -113,8 +120,27 @@ The application follows a service-oriented architecture with interfaces:
 2. Services are organized by domain (e.g., `actuarial`, `kaggle`)
 3. Service interfaces define contracts in `services/interfaces/`
 4. Cross-cutting concerns have dedicated services (e.g., `r_service.py`)
-5. Error handling is standardized through the error handling utilities
-6. Logging is consistent across all services
+5. Services are accessed through a service provider to enforce the Dependency Inversion Principle
+6. Error handling is standardized through the error handling utilities
+7. Logging is consistent across all services
+
+#### Service Provider
+
+The application uses a service provider pattern to implement the Dependency Inversion Principle:
+
+```python
+from services.provider import get_r_service, get_actuarial_service
+
+# Get service implementations through the provider
+r_service = get_r_service()
+actuarial_service = get_actuarial_service()
+
+# Use services through their interfaces
+if r_service.is_available():
+    # Do something with the R service
+```
+
+This ensures that components depend on abstractions (interfaces/protocols) rather than concrete implementations.
 
 ### Design Principles
 
@@ -125,6 +151,9 @@ The application implements SOLID design principles:
 3. **Liskov Substitution Principle**: Subtypes must be substitutable for their base types
 4. **Interface Segregation Principle**: Clients shouldn't depend on methods they don't use
 5. **Dependency Inversion Principle**: High-level modules depend on abstractions, not implementations
+   - Interfaces defined as protocols in `services/interfaces/`
+   - Service provider mechanism in `services/provider.py`
+   - Components request services by interface rather than importing concrete implementations
 
 Additionally, the application follows:
 
