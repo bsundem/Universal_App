@@ -19,10 +19,11 @@ Universal App is built on modern software architecture principles:
 ## Features
 
 ### Architecture
-- **Dependency Injection Container**: Service management with `dependency-injector`
-- **Protocol-Based Interfaces**: Type-safe service contracts
+- **Registration-Based DI Container**: Dynamic service registration with interface-based resolution
+- **Multiple Interface Implementations**: Support for resolving all implementations of an interface
+- **Protocol-Based Interfaces**: Type-safe service contracts with full generics support
 - **Composition-Based UI**: Modular, testable UI components
-- **Service-Oriented Design**: Clean separation of business logic
+- **Service-Oriented Design**: Clean separation of business logic and interfaces
 
 ### Technology
 - **Tkinter GUI**: Cross-platform native interface (Python standard library)
@@ -294,36 +295,45 @@ weather_service = WeatherService()
 
 ### 3. Register the Service with the Container
 
-Update the DI container to include your new service:
+Register your service with the container using the registration system:
 
 ```python
-# services/container.py
-# Add this to the imports at the top
+# services/weather/weather_service.py
+# At the bottom of the file, after creating the service instance
+from services.container import register_service
 from services.interfaces.weather_services import WeatherServiceInterface
-from services.weather.weather_service import weather_service
 
-# Add this to the Container class
-class Container(containers.DeclarativeContainer):
-    # Existing providers...
+# Define a factory function
+def create_weather_service_provider():
+    """Factory function for weather service provider."""
+    from dependency_injector import providers
+    return providers.Singleton(lambda: weather_service)
 
-    # Weather services
-    weather_service_provider = providers.Singleton(lambda: weather_service)
+# Register the service with the container
+register_service(
+    name='weather_service',
+    instance=weather_service,
+    interface_type=WeatherServiceInterface,
+    factory_fn=create_weather_service_provider
+)
 
-# Add this helper function
+# In services/container.py, add a helper function
 def get_weather_service() -> WeatherServiceInterface:
     """Get the weather service implementation."""
-    service = container.weather_service_provider()
-    if service is None:
-        raise RuntimeError("Weather service is not registered with the service provider")
-    return service
+    return container.weather_service_provider()
+```
 
-# Add this to initialize_provider()
-def initialize_provider():
-    """Initialize the service provider with default implementations."""
-    # Existing registrations...
+Now your service is accessible through both its specific getter function and interface-based resolution:
 
-    # Register weather service
-    provider.register(WeatherServiceInterface, weather_service)
+```python
+# Direct access
+from services.container import get_weather_service
+weather_service = get_weather_service()
+
+# Interface-based access
+from services.container import get_service_by_interface
+from services.interfaces.weather_services import WeatherServiceInterface
+weather_service = get_service_by_interface(WeatherServiceInterface)
 ```
 
 ### 4. Create a Page for the New Project
@@ -655,14 +665,15 @@ To add a new project module to the application:
 
 1. **Define Service Interfaces**: Create protocol classes in `services/interfaces/`
 2. **Implement Services**: Create service implementations in `services/your_module/`
-3. **Register with Container**: Add services to the DI container in `services/container.py`
-4. **Create UI**: Create a page class using `ContentPage` in `ui/pages/`
-5. **Add to Navigation**: Update `MainWindow.setup_pages()` and `Sidebar._setup_navigation()`
-6. **Write Tests**: Create unit tests for your services
+3. **Create Factory Functions**: Define factory functions for creating service providers
+4. **Register with Container**: Register services with the container using `register_service()`
+5. **Create UI**: Create a page class using `ContentPage` in `ui/pages/`
+6. **Add to Navigation**: Update `MainWindow.setup_pages()` and `Sidebar._setup_navigation()`
+7. **Write Tests**: Create unit tests with container override support
 
-This approach ensures your new module follows the established architecture, adheres to SOLID principles, and is properly integrated with the dependency injection system.
+This approach ensures your new module follows the established architecture, adheres to SOLID principles, and is properly integrated with the dependency injection system. The registration-based container allows for a truly extensible system without modifying existing code.
 
-The application exclusively uses the composition pattern for page creation, which provides better flexibility and testability than inheritance.
+The application exclusively uses the composition pattern for page creation and leverages Protocol-based interfaces for type safety. Services can be accessed both through explicit getter functions and through dynamic interface-based resolution, providing maximum flexibility.
 
 ### Services Architecture
 
@@ -737,10 +748,10 @@ This ensures that components depend on abstractions (interfaces/protocols) rathe
 
 #### Testing with the Container
 
-For testing, the container provides utilities to override service implementations with mocks:
+For testing, the container provides robust utilities to override service implementations with mocks:
 
 ```python
-from services.container import override_provider, reset_overrides
+from services.container import override_provider, reset_overrides, reset_single_provider
 from unittest.mock import MagicMock
 
 # Create a mock implementation
@@ -756,16 +767,32 @@ assert get_r_service() is mock_r_service  # Verify we get our mock
 
 # Reset all overrides when done
 reset_overrides()
+
+# Or reset just a specific service
+reset_single_provider("r_service")
+```
+
+You can also test services that were resolved by interface:
+
+```python
+from services.container import get_service_by_interface
+from services.interfaces.r_service import RServiceInterface
+
+# Get service by interface (will be the mock)
+r_service = get_service_by_interface(RServiceInterface)
+assert r_service.is_available() is True
 ```
 
 ##### Advanced Testing Features
 
-The container also provides advanced testing capabilities:
+The container provides advanced testing capabilities:
 
-1. **Reset mechanism**: Properly resets all service provider overrides between tests
-2. **Provider validation**: Validates that overridden service names exist
-3. **Object provider**: Uses `providers.Object` for direct object injection
-4. **Integration with pytest fixtures**: Special fixtures automatically set up and tear down mocks
+1. **Identity preservation**: Original service instances are preserved between tests
+2. **Reset mechanism**: Safely resets overrides even with dynamic registrations
+3. **Provider validation**: Validates that overridden service names exist
+4. **Object provider**: Uses `providers.Object` for direct object injection
+5. **Multiple interface testing**: Test different implementations of the same interface
+6. **Integration with pytest fixtures**: Special fixtures automatically set up and tear down mocks
 
 ```python
 # Example pytest fixture
@@ -782,9 +809,22 @@ def mock_r_service():
 
     # Reset after the test
     reset_overrides()
+
+# Using it in a test
+def test_with_interface_resolution(mock_r_service):
+    # Get the service by interface
+    from services.interfaces.r_service import RServiceInterface
+    service = get_service_by_interface(RServiceInterface)
+
+    # This will be our mock
+    assert service is mock_r_service
+
+    # Test multiple implementations
+    all_services = get_all_services_by_interface(LoggerInterface)
+    assert len(all_services) == 2  # Basic and advanced loggers
 ```
 
-This makes it easy to test components in isolation without dependencies on actual implementations.
+This makes it easy to test components in isolation without dependencies on actual implementations, while supporting a fully extensible architecture.
 
 ### Design Principles
 

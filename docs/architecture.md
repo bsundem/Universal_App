@@ -46,33 +46,60 @@ Universal_App/
 
 ### Dependency Injection Container
 
-The cornerstone of the architecture is the dependency injection container (`services/container.py`), which:
+The cornerstone of the architecture is the registration-based dependency injection container (`services/container.py`), which:
 
-- Manages service lifecycles
+- Manages service lifecycles through a service registry
 - Provides typed interfaces for service access
-- Enables substitution of implementations
-- Supports testing with provider overrides
+- Supports dynamic service registration
+- Enables interface-based service resolution
+- Handles multiple implementations of the same interface
+- Maintains service identity through tests
+- Supports provider overrides for testing
 
 ```python
-# Example: Getting a service through the container
+# Direct service access
 from services.container import get_r_service
-
 r_service = get_r_service()
 r_service.execute_script("my_script.R")
+
+# Interface-based resolution
+from services.container import get_service_by_interface
+from services.interfaces.r_service import RServiceInterface
+r_service = get_service_by_interface(RServiceInterface)
+
+# Working with multiple implementations
+from services.container import get_all_services_by_interface
+from services.interfaces.logging import LoggerInterface
+loggers = get_all_services_by_interface(LoggerInterface)
+for name, logger in loggers.items():
+    logger.log("Using multiple implementations")
 ```
 
-### Service Registry and Provider Factories
+### ServiceRegistry and Dynamic Registration
 
-The container includes:
+The container includes a full registration system:
 
-- Factory functions for each provider
-- A registry of providers by interface type
+- `ServiceRegistry`: Class for tracking service metadata
+- Registration functions for dynamic service addition
+- Factory functions for creating providers
+- Interface-to-service mapping for runtime resolution
 - Methods for overriding and resetting providers
-- Utility functions for dynamic service resolution
 
 ```python
-# Dynamic service resolution by interface type
-service = get_service_by_interface(KaggleServiceInterface)
+# Registering a new service
+from services.container import register_service
+
+# Define factory function
+def create_service_provider():
+    return providers.Singleton(lambda: my_service)
+
+# Register with the container
+register_service(
+    name='my_service',
+    instance=my_service,
+    interface_type=MyServiceInterface,
+    factory_fn=create_service_provider
+)
 ```
 
 ### Service Adapters
@@ -193,8 +220,39 @@ The testing framework is designed for comprehensive coverage:
 - **Integration Tests**: For testing component interactions
 - **Functional Tests**: For testing complete features
 
+The DI container provides robust testing support:
+
+- **Service Overrides**: Replace real services with mocks
+- **Identity Preservation**: Maintain service identity across resets
+- **Interface Testing**: Test services by their interface types
+- **Multiple Implementation Testing**: Test systems with multiple implementations
+- **Reset Capabilities**: Safely reset to original implementations
+- **Selective Resets**: Reset specific services while keeping others mocked
+
+```python
+# Container testing example
+def test_service_interaction(mock_r_service):
+    # mock_r_service is automatically injected via fixture
+    # and registered with the container
+
+    # Get service from container (it will be our mock)
+    r_service = get_r_service()
+
+    # Verify it's our mock
+    assert r_service is mock_r_service
+
+    # Interface-based testing
+    same_service = get_service_by_interface(RServiceInterface)
+    assert same_service is mock_r_service
+
+    # Test with multiple implementations
+    mock_r_service.is_available.return_value = True
+    assert r_service.is_available() is True
+```
+
 Test fixtures provide common test setup:
 
 - Mock services for all dependencies
 - Container overrides for service substitution
 - UI testing utilities
+- Automatic provider reset after tests

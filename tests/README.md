@@ -111,6 +111,30 @@ Common fixtures are defined in `conftest.py`, including:
 - `mock_kaggle_service`: A mock of the Kaggle service
 - `mock_kaggle_data_manager`: A mock of the Kaggle data manager
 
+These fixtures automatically work with both direct access and interface-based resolution:
+
+```python
+# Test with direct access
+def test_direct_access(mock_r_service):
+    service = get_r_service()
+    assert service is mock_r_service
+
+# Test with interface-based resolution
+def test_interface_resolution(mock_r_service):
+    from services.interfaces.r_service import RServiceInterface
+    service = get_service_by_interface(RServiceInterface)
+    assert service is mock_r_service
+```
+
+You can also reset specific providers:
+
+```python
+from services.container import reset_single_provider
+
+# Reset just one service
+reset_single_provider("r_service")
+```
+
 ### UI Testing Fixtures
 
 - `tk_root`: A Tkinter root window for UI testing
@@ -147,7 +171,15 @@ Common fixtures are defined in `conftest.py`, including:
 ```python
 import pytest
 from unittest.mock import MagicMock
-from services.container import get_r_service, override_provider, reset_overrides
+from services.container import (
+    get_r_service,
+    get_service_by_interface,
+    get_all_services_by_interface,
+    override_provider,
+    reset_overrides,
+    reset_single_provider
+)
+from services.interfaces.r_service import RServiceInterface
 
 @pytest.mark.container
 class TestRServiceContainer:
@@ -167,6 +199,57 @@ class TestRServiceContainer:
         # Assert
         mock_r_service.is_available.assert_called_once()
         assert result is True
+
+    def test_interface_resolution(self, mock_r_service):
+        """Test resolving service by interface."""
+        # Get service by interface type
+        r_service = get_service_by_interface(RServiceInterface)
+
+        # Verify it's our mock
+        assert r_service is mock_r_service
+
+        # Use the service
+        mock_r_service.execute_script.return_value = "success"
+        result = r_service.execute_script("test.R")
+        assert result == "success"
+
+    def test_multiple_implementations(self):
+        """Test working with multiple implementations."""
+        # Create two mock loggers
+        mock_basic_logger = MagicMock()
+        mock_advanced_logger = MagicMock()
+
+        # Override both implementations
+        from services.interfaces.logging import LoggerInterface
+        override_provider("basic_logger", mock_basic_logger)
+        override_provider("advanced_logger", mock_advanced_logger)
+
+        try:
+            # Get all logger implementations
+            loggers = get_all_services_by_interface(LoggerInterface)
+
+            # Verify we have both
+            assert len(loggers) == 2
+            assert "basic_logger" in loggers
+            assert "advanced_logger" in loggers
+
+            # Use all loggers
+            for name, logger in loggers.items():
+                logger.log("Test message")
+
+            # Verify both were called
+            mock_basic_logger.log.assert_called_with("Test message")
+            mock_advanced_logger.log.assert_called_with("Test message")
+
+            # Reset just one logger
+            reset_single_provider("basic_logger")
+
+            # Advanced logger should still be mocked
+            get_service_by_interface(LoggerInterface).log("Still mocked")
+            mock_advanced_logger.log.assert_called_with("Still mocked")
+        finally:
+            # Reset all services
+            reset_overrides()
 ```
 
 #### Testing UI Components
