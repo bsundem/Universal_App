@@ -3,13 +3,33 @@ from tkinter import ttk, messagebox, filedialog
 import os
 import threading
 import tempfile
-import pandas as pd
-import numpy as np
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
+import importlib.util
+
+# Check for pandas
+if importlib.util.find_spec("pandas") is not None:
+    import pandas as pd
+else:
+    pd = None
+    
+# Check for numpy
+if importlib.util.find_spec("numpy") is not None:
+    import numpy as np
+else:
+    np = None
+
+# Check for matplotlib
+matplotlib_available = importlib.util.find_spec("matplotlib") is not None
+if matplotlib_available:
+    import matplotlib
+    matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
+else:
+    matplotlib = None
+    plt = None
+    FigureCanvasTkAgg = None
+    Figure = None
 
 # Import the base page class
 from ui.pages.base_page import BasePage
@@ -29,8 +49,8 @@ class KagglePage(BasePage):
     """Page for fetching and visualizing data from Kaggle."""
     
     def __init__(self, parent, controller):
-        super().__init__(parent, controller)
-        self.title = "Kaggle Data Explorer"
+        super().__init__(parent, title="Kaggle Data Explorer")
+        self.controller = controller
         self.current_dataset = None
         self.current_dataset_ref = None
         self.current_file = None
@@ -41,7 +61,7 @@ class KagglePage(BasePage):
     def setup_ui(self):
         """Set up the UI components for the Kaggle page."""
         # Main container frame
-        self.main_frame = ttk.Frame(self, padding="10")
+        self.main_frame = ttk.Frame(self.content_frame, padding="10")
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Check Kaggle credentials before proceeding
@@ -559,6 +579,16 @@ class KagglePage(BasePage):
             error_label.pack(expand=True)
             return
             
+        # Check if pandas is available
+        if pd is None:
+            error_label = ttk.Label(
+                self.df_frame,
+                text="Pandas is not available. Please install with: pip install pandas",
+                foreground="red"
+            )
+            error_label.pack(expand=True)
+            return
+            
         # Create a frame for the DataFrame preview
         preview_frame = ttk.Frame(self.df_frame)
         preview_frame.pack(fill=tk.BOTH, expand=True)
@@ -710,6 +740,37 @@ class KagglePage(BasePage):
         for widget in self.plot_container.winfo_children():
             widget.destroy()
             
+        # Check if matplotlib is available
+        if not matplotlib_available or Figure is None:
+            error_label = ttk.Label(
+                self.plot_container,
+                text="Matplotlib is not available. Please install with: pip install matplotlib",
+                foreground="red"
+            )
+            error_label.pack(expand=True)
+            
+            # Display data as text instead
+            if pd is not None and df is not None:
+                text_frame = ttk.Frame(self.plot_container)
+                text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+                
+                data_text = tk.Text(text_frame, height=20, width=50)
+                data_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+                
+                scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=data_text.yview)
+                scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+                data_text.config(yscrollcommand=scrollbar.set)
+                
+                # Display data summary
+                data_text.insert(tk.END, f"Data Summary for: {x_col}\n\n")
+                if pd.api.types.is_numeric_dtype(df[x_col]):
+                    data_text.insert(tk.END, df[x_col].describe().to_string())
+                else:
+                    data_text.insert(tk.END, df[x_col].value_counts().to_string())
+                data_text.config(state=tk.DISABLED)
+            
+            return
+            
         try:
             # Create figure and axis
             fig = Figure(figsize=(10, 6), dpi=100)
@@ -739,13 +800,15 @@ class KagglePage(BasePage):
                     value_counts = bins.value_counts().sort_index()
                     ax.bar(range(len(value_counts)), value_counts.values, tick_label=[str(x) for x in value_counts.index])
                     ax.set_xlabel(x_col)
-                    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+                    if plt:
+                        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
                 else:
                     # For categorical data
                     value_counts = df[x_col].value_counts().sort_index()
                     ax.bar(range(len(value_counts)), value_counts.values, tick_label=value_counts.index)
                     ax.set_xlabel(x_col)
-                    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+                    if plt:
+                        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
                     
                 ax.set_ylabel('Count')
                 ax.set_title(f'Bar Chart of {x_col}')
@@ -782,6 +845,7 @@ class KagglePage(BasePage):
                         ax.plot(range(len(categories)), category_means, marker='o')
                         ax.set_xticks(range(len(categories)))
                         ax.set_xticklabels(categories)
+                        if plt:
                         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
                         
                     ax.set_xlabel(x_col)

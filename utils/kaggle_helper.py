@@ -4,23 +4,35 @@ Utility functions for interacting with the Kaggle API.
 import os
 import json
 import tempfile
-import pandas as pd
-from kaggle.api.kaggle_api_extended import KaggleApi
+import importlib.util
+
+# Check if pandas is available
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+
+# Check if kaggle is installed but don't import the API directly
+# to avoid immediate authentication
+kaggle_available = importlib.util.find_spec("kaggle") is not None
 
 
 def check_api_credentials():
     """
     Check if Kaggle API credentials are properly configured.
-    
+
     Returns:
         bool: True if credentials are found, False otherwise
     """
+    if not kaggle_available:
+        return False
+
     kaggle_dir = os.path.expanduser('~/.kaggle')
     kaggle_file = os.path.join(kaggle_dir, 'kaggle.json')
-    
+
     if not os.path.exists(kaggle_file):
         return False
-    
+
     # Check if the file has valid JSON content
     try:
         with open(kaggle_file, 'r') as f:
@@ -62,38 +74,45 @@ def setup_credentials(username, key):
 def get_dataset_list(search_term='', max_size_mb=None, file_type=None, user=None, max_results=20):
     """
     Fetch a list of datasets from Kaggle matching the search criteria.
-    
+
     Args:
         search_term (str): Search term to filter datasets
         max_size_mb (int, optional): Maximum dataset size in MB
         file_type (str, optional): Filter by file type (csv, sqlite, json, etc.)
         user (str, optional): Filter by a specific Kaggle user
         max_results (int): Maximum number of results to return
-        
+
     Returns:
         list: List of dataset metadata dictionaries
     """
+    if not kaggle_available:
+        print("Kaggle API not available. Please install with: pip install kaggle")
+        return []
+
     try:
+        # Import KaggleAPI only when needed
+        from kaggle.api.kaggle_api_extended import KaggleApi
+
         api = KaggleApi()
         api.authenticate()
-        
+
         # Convert max_size to bytes for filtering
         max_size_bytes = max_size_mb * 1024 * 1024 if max_size_mb else None
-        
+
         # Get datasets list
         datasets = api.dataset_list(search=search_term)
-        
+
         # Apply filters
         filtered_datasets = []
         for dataset in datasets:
             # Skip if dataset is larger than max_size
             if max_size_bytes and dataset.size > max_size_bytes:
                 continue
-                
+
             # Skip if user doesn't match
             if user and dataset.ownerName != user:
                 continue
-                
+
             # Add dataset to filtered list
             dataset_dict = {
                 'ref': f"{dataset.ownerName}/{dataset.slug}",
@@ -110,10 +129,10 @@ def get_dataset_list(search_term='', max_size_mb=None, file_type=None, user=None
                 'owner': dataset.ownerName
             }
             filtered_datasets.append(dataset_dict)
-            
+
             if len(filtered_datasets) >= max_results:
                 break
-        
+
         # Further filter by file type if specified
         if file_type and filtered_datasets:
             file_filtered = []
@@ -129,7 +148,7 @@ def get_dataset_list(search_term='', max_size_mb=None, file_type=None, user=None
                     # Skip datasets with errors
                     continue
             return file_filtered
-            
+
         return filtered_datasets
     except Exception as e:
         print(f"Error fetching datasets: {e}")
@@ -139,26 +158,33 @@ def get_dataset_list(search_term='', max_size_mb=None, file_type=None, user=None
 def download_dataset_file(dataset_ref, filename, output_dir=None):
     """
     Download a specific file from a Kaggle dataset.
-    
+
     Args:
         dataset_ref (str): Dataset reference in the format 'owner/dataset-name'
         filename (str): File to download from the dataset
         output_dir (str, optional): Directory to save the file to. If None, uses a temp dir.
-        
+
     Returns:
         str: Path to the downloaded file, or None if download failed
     """
+    if not kaggle_available:
+        print("Kaggle API not available. Please install with: pip install kaggle")
+        return None
+
     try:
+        # Import KaggleAPI only when needed
+        from kaggle.api.kaggle_api_extended import KaggleApi
+
         api = KaggleApi()
         api.authenticate()
-        
+
         # Create temp directory if output_dir not specified
         if output_dir is None:
             output_dir = tempfile.mkdtemp()
-        
+
         # Download the file
         api.dataset_download_file(dataset_ref, filename, path=output_dir, force=True)
-        
+
         # Return path to the downloaded file
         file_path = os.path.join(output_dir, filename)
         if os.path.exists(file_path):
@@ -172,20 +198,27 @@ def download_dataset_file(dataset_ref, filename, output_dir=None):
 def get_dataset_files(dataset_ref):
     """
     Get list of files in a Kaggle dataset.
-    
+
     Args:
         dataset_ref (str): Dataset reference in the format 'owner/dataset-name'
-        
+
     Returns:
         list: List of file information dictionaries
     """
+    if not kaggle_available:
+        print("Kaggle API not available. Please install with: pip install kaggle")
+        return []
+
     try:
+        # Import KaggleAPI only when needed
+        from kaggle.api.kaggle_api_extended import KaggleApi
+
         api = KaggleApi()
         api.authenticate()
-        
+
         # Get file list
         file_list = api.dataset_list_files(dataset_ref).files
-        
+
         # Convert to list of dictionaries
         result = []
         for file in file_list:
@@ -195,7 +228,7 @@ def get_dataset_files(dataset_ref):
                 'sizeMB': round(file.size / (1024 * 1024), 2)
             }
             result.append(file_info)
-        
+
         return result
     except Exception as e:
         print(f"Error getting dataset files: {e}")
@@ -206,13 +239,17 @@ def load_dataset_to_dataframe(file_path):
     """
     Load a downloaded dataset file into a pandas DataFrame.
     Supports CSV, Excel, JSON, and parquet formats.
-    
+
     Args:
         file_path (str): Path to the dataset file
-        
+
     Returns:
         pandas.DataFrame: Loaded dataframe, or None if loading failed
     """
+    if pd is None:
+        print("Pandas is not installed. Please install with: pip install pandas")
+        return None
+
     try:
         file_lower = file_path.lower()
         if file_lower.endswith('.csv'):

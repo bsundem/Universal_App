@@ -3,45 +3,57 @@ from tkinter import ttk, messagebox
 import os
 import sys
 import tempfile
-import numpy as np
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import importlib.util
+
+# Check for numpy
+if importlib.util.find_spec("numpy") is not None:
+    import numpy as np
+else:
+    np = None
+
+# Check for matplotlib
+if importlib.util.find_spec("matplotlib") is not None:
+    import matplotlib
+    matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+else:
+    matplotlib = None
+    plt = None
+    FigureCanvasTkAgg = None
 
 # Import the base page class
 from ui.pages.base_page import BasePage
 
-try:
-    import rpy2.robjects as robjects
-    from rpy2.robjects import pandas2ri
-    from rpy2.robjects.packages import importr
-    
-    # Enable pandas to R conversion
-    pandas2ri.activate()
-    
-    # Import R packages
-    base = importr('base')
-    stats = importr('stats')
-    lifecycle = importr('lifecycle')
-    
-    R_AVAILABLE = True
-except ImportError:
-    R_AVAILABLE = False
-    
+# Check for rpy2
+R_AVAILABLE = False
+if importlib.util.find_spec("rpy2") is not None:
+    try:
+        import rpy2.robjects as robjects
+        from rpy2.robjects import pandas2ri
+        from rpy2.robjects.packages import importr
+        
+        # Enable pandas to R conversion
+        pandas2ri.activate()
+        
+        # Just set R_AVAILABLE to True (we'll check for specific packages when needed)
+        R_AVAILABLE = True
+    except Exception:
+        pass
+
 
 class ActuarialPage(BasePage):
     """Page for actuarial calculations using R integration."""
     
     def __init__(self, parent, controller):
-        super().__init__(parent, controller)
-        self.title = "Actuarial Calculations"
+        super().__init__(parent, title="Actuarial Calculations")
+        self.controller = controller
         self.setup_ui()
         
     def setup_ui(self):
         """Set up the UI components for the actuarial page."""
         # Main container frame with padding
-        main_frame = ttk.Frame(self, padding="10")
+        main_frame = ttk.Frame(self.content_frame, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Header
@@ -264,14 +276,24 @@ class ActuarialPage(BasePage):
         """Create an empty plot in the plot frame."""
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
-            
+
+        if matplotlib is None or plt is None or FigureCanvasTkAgg is None:
+            # Create a message indicating matplotlib is not available
+            message = ttk.Label(
+                self.plot_frame,
+                text="Matplotlib is not available. Please install with: pip install matplotlib",
+                foreground="red"
+            )
+            message.pack(expand=True)
+            return
+
         fig, ax = plt.subplots(figsize=(8, 6))
-        ax.text(0.5, 0.5, "Click 'Calculate' to generate mortality data", 
+        ax.text(0.5, 0.5, "Click 'Calculate' to generate mortality data",
                 ha='center', va='center', fontsize=12)
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.set_axis_off()
-        
+
         canvas = FigureCanvasTkAgg(fig, self.plot_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -390,9 +412,35 @@ class ActuarialPage(BasePage):
         """Plot mortality data."""
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
-            
+
+        if matplotlib is None or plt is None or FigureCanvasTkAgg is None:
+            # Create a message indicating matplotlib is not available
+            message = ttk.Label(
+                self.plot_frame,
+                text="Matplotlib is not available. Please install with: pip install matplotlib",
+                foreground="red"
+            )
+            message.pack(expand=True)
+
+            # Display data as text instead
+            text_frame = ttk.Frame(self.plot_frame)
+            text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+
+            data_text = tk.Text(text_frame, height=20, width=50)
+            data_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+            scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=data_text.yview)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            data_text.config(yscrollcommand=scrollbar.set)
+
+            # Insert dataframe as text
+            data_text.insert(tk.END, "Mortality Data:\n\n")
+            data_text.insert(tk.END, df.to_string())
+            data_text.config(state=tk.DISABLED)
+            return
+
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 7), gridspec_kw={'height_ratios': [1, 1]})
-        
+
         # Plot mortality rates
         ax1.plot(df['Age'], df['qx'], 'b-', label='Mortality Rate (qx)')
         ax1.set_title('Mortality Rates by Age')
@@ -400,7 +448,7 @@ class ActuarialPage(BasePage):
         ax1.set_ylabel('Rate')
         ax1.legend()
         ax1.grid(True, linestyle='--', alpha=0.7)
-        
+
         # Plot life expectancy
         ax2.plot(df['Age'], df['ex'], 'r-', label='Life Expectancy (ex)')
         ax2.set_title('Life Expectancy by Age')
@@ -408,9 +456,9 @@ class ActuarialPage(BasePage):
         ax2.set_ylabel('Years')
         ax2.legend()
         ax2.grid(True, linestyle='--', alpha=0.7)
-        
+
         plt.tight_layout()
-        
+
         canvas = FigureCanvasTkAgg(fig, self.plot_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)

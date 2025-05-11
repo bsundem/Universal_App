@@ -14,37 +14,31 @@ class BasePage:
     
     def _setup_ui(self, title, description):
         """Setup the basic UI elements for the page."""
-        current_row = 0
-        
+        # Create a content frame for our actual page content
+        self.content_frame = ttk.Frame(self.frame)
+        self.content_frame.pack(fill=tk.BOTH, expand=True)
+
         # Page title
         if title:
             title_label = ttk.Label(
-                self.frame, 
+                self.content_frame,
                 text=title,
                 font=("Arial", 20, "bold"),
                 foreground="#2C3E50"
             )
-            title_label.grid(row=current_row, column=0, sticky="w", padx=20, pady=(20, 10))
-            current_row += 1
-            
+            title_label.pack(anchor="w", padx=20, pady=(20, 10))
+
             # Separator
-            separator = ttk.Separator(self.frame, orient="horizontal")
-            separator.grid(row=current_row, column=0, sticky="ew", padx=20)
-            current_row += 1
-        
+            separator = ttk.Separator(self.content_frame, orient="horizontal")
+            separator.pack(fill="x", padx=20)
+
         # Description
         if description:
             desc_label = ttk.Label(
-                self.frame, 
+                self.content_frame,
                 text=description,
                 font=("Arial", 12),
                 foreground="#333333",
                 wraplength=600
             )
-            desc_label.grid(row=current_row, column=0, sticky="w", padx=20, pady=(20, 10))
-            current_row += 1
-        
-        # Add an empty frame at the bottom to push content to the top
-        spacer = ttk.Frame(self.frame)
-        spacer.grid(row=current_row, column=0, sticky="ew")
-        self.frame.rowconfigure(current_row, weight=1)
+            desc_label.pack(anchor="w", padx=20, pady=(20, 10))
