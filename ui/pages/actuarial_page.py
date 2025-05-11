@@ -1,7 +1,9 @@
+"""
+Actuarial calculations page with R integration.
+"""
 import tkinter as tk
 from tkinter import ttk, messagebox
 import os
-import sys
 import tempfile
 import importlib.util
 
@@ -10,6 +12,12 @@ if importlib.util.find_spec("numpy") is not None:
     import numpy as np
 else:
     np = None
+
+# Check for pandas
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
 
 # Check for matplotlib
 if importlib.util.find_spec("matplotlib") is not None:
@@ -25,21 +33,9 @@ else:
 # Import the base page class
 from ui.pages.base_page import BasePage
 
-# Check for rpy2
-R_AVAILABLE = False
-if importlib.util.find_spec("rpy2") is not None:
-    try:
-        import rpy2.robjects as robjects
-        from rpy2.robjects import pandas2ri
-        from rpy2.robjects.packages import importr
-        
-        # Enable pandas to R conversion
-        pandas2ri.activate()
-        
-        # Just set R_AVAILABLE to True (we'll check for specific packages when needed)
-        R_AVAILABLE = True
-    except Exception:
-        pass
+# Import actuarial service and R service
+from services.actuarial.actuarial_service import actuarial_service
+from services.r_service import r_service
 
 
 class ActuarialPage(BasePage):
@@ -62,7 +58,7 @@ class ActuarialPage(BasePage):
         header.pack(pady=(0, 10))
         
         # Check if R is available
-        if not R_AVAILABLE:
+        if not r_service.is_available():
             error_frame = ttk.Frame(main_frame, padding="20")
             error_frame.pack(fill=tk.BOTH, expand=True)
             error_msg = ttk.Label(
@@ -300,7 +296,7 @@ class ActuarialPage(BasePage):
         
     def calculate_mortality(self):
         """Calculate mortality data using R and display results."""
-        if not R_AVAILABLE:
+        if not r_service.is_available():
             messagebox.showerror("Error", "R integration is not available.")
             return
             
@@ -312,99 +308,21 @@ class ActuarialPage(BasePage):
             table_type = self.mortality_table.get()
             gender = self.gender.get().lower()
             
-            # R code for mortality calculations
-            r_code = """
-            calculate_mortality <- function(age_from, age_to, interest_rate, table_type, gender) {
-              # This is a simplified example
-              # In a real application, you would use actual mortality tables
-              
-              ages <- age_from:age_to
-              
-              # Different mortality rates based on table type and gender
-              if (table_type == "Standard Mortality") {
-                if (gender == "male") {
-                  # Simplified Gompertz-Makeham for illustration
-                  qx <- 0.0005 + 0.00008 * exp(0.09 * ages)
-                } else if (gender == "female") {
-                  qx <- 0.0004 + 0.00004 * exp(0.09 * ages)
-                } else {
-                  # Unisex
-                  qx <- 0.00045 + 0.00006 * exp(0.09 * ages)
-                }
-              } else if (table_type == "Annuitant Mortality") {
-                # Annuitant tables typically have lower mortality rates
-                if (gender == "male") {
-                  qx <- 0.0004 + 0.00006 * exp(0.085 * ages)
-                } else if (gender == "female") {
-                  qx <- 0.0003 + 0.00003 * exp(0.085 * ages)
-                } else {
-                  qx <- 0.00035 + 0.000045 * exp(0.085 * ages)
-                }
-              } else {
-                # Custom mortality (simplified)
-                qx <- 0.0003 + 0.00005 * exp(0.08 * ages)
-              }
-              
-              # Calculate survival probabilities
-              px <- 1 - qx
-              lx <- c(100000, rep(0, length(ages)-1))
-              for (i in 2:length(ages)) {
-                lx[i] <- lx[i-1] * px[i-1]
-              }
-              
-              # Calculate life expectancy
-              ex <- rep(0, length(ages))
-              for (i in 1:length(ages)) {
-                future_lx <- c(lx[i:length(lx)])
-                future_lx <- future_lx / future_lx[1]
-                ex[i] <- sum(future_lx) - 0.5
-              }
-              
-              # Discount factors
-              v <- (1/(1+interest_rate))^(0:(length(ages)-1))
-              
-              # Calculate annuity factors
-              ax <- rep(0, length(ages))
-              for (i in 1:length(ages)) {
-                future_lx <- lx[i:length(lx)] / lx[i]
-                ax[i] <- sum(future_lx * v[1:length(future_lx)])
-              }
-              
-              # Prepare results
-              result <- data.frame(
-                Age = ages,
-                qx = qx,
-                px = px,
-                lx = lx,
-                ex = ex,
-                ax = ax
-              )
-              
-              return(result)
-            }
+            # Use the actuarial service to calculate mortality data
+            mortality_df = actuarial_service.calculate_mortality_data(
+                age_from, 
+                age_to, 
+                interest_rate, 
+                table_type, 
+                gender
+            )
             
-            result <- calculate_mortality(age_from, age_to, interest_rate, table_type, gender)
-            result
-            """
-            
-            # Run R code
-            robjects.r(r_code)
-            r_result = robjects.r(f"calculate_mortality({age_from}, {age_to}, {interest_rate}, '{table_type}', '{gender}')")
-            
-            # Convert to pandas dataframe
-            import pandas as pd
-            mortality_df = pd.DataFrame({
-                'Age': r_result.rx2('Age'),
-                'qx': r_result.rx2('qx'),
-                'px': r_result.rx2('px'),
-                'lx': r_result.rx2('lx'),
-                'ex': r_result.rx2('ex'),
-                'ax': r_result.rx2('ax')
-            })
-            
-            # Create plot
-            self.plot_mortality_data(mortality_df)
-            
+            if mortality_df is not None:
+                # Create plot
+                self.plot_mortality_data(mortality_df)
+            else:
+                messagebox.showerror("Error", "Failed to calculate mortality data.")
+                
         except Exception as e:
             messagebox.showerror("Error", f"Failed to calculate mortality data: {str(e)}")
             
@@ -472,7 +390,7 @@ class ActuarialPage(BasePage):
         
     def calculate_present_value(self):
         """Calculate present value of an annuity."""
-        if not R_AVAILABLE:
+        if not r_service.is_available():
             messagebox.showerror("Error", "R integration is not available.")
             return
             
@@ -490,145 +408,25 @@ class ActuarialPage(BasePage):
             freq_map = {"Annual": 1, "Semi-annual": 2, "Quarterly": 4, "Monthly": 12}
             freq_factor = freq_map.get(frequency, 1)
             
-            # R code for present value calculations
-            r_code = """
-            calculate_pv <- function(age, payment, interest_rate, term, freq_factor, 
-                                   table_type, gender) {
-              # Convert to equivalent annual interest rate
-              i <- interest_rate
-              
-              # Number of payments
-              n <- term * freq_factor
-              
-              if (table_type == "None (Fixed Term)") {
-                # Fixed term annuity calculation
-                v <- 1/(1+i)
-                if (i == 0) {
-                  pv <- payment * n / freq_factor
-                } else {
-                  pv <- payment * (1 - v^n) / (i * freq_factor)
-                }
-                
-                expected_duration <- term
-                
-              } else {
-                # Life contingent annuity
-                # Simplified mortality calculation for demonstration
-                
-                # Different mortality rates based on table type and gender
-                if (table_type == "Standard Mortality") {
-                  if (gender == "male") {
-                    # Simplified Gompertz-Makeham for illustration
-                    qx_base <- 0.0005 + 0.00008 * exp(0.09 * age)
-                  } else if (gender == "female") {
-                    qx_base <- 0.0004 + 0.00004 * exp(0.09 * age)
-                  } else {
-                    # Unisex
-                    qx_base <- 0.00045 + 0.00006 * exp(0.09 * age)
-                  }
-                } else if (table_type == "Annuitant Mortality") {
-                  # Annuitant tables typically have lower mortality rates
-                  if (gender == "male") {
-                    qx_base <- 0.0004 + 0.00006 * exp(0.085 * age)
-                  } else if (gender == "female") {
-                    qx_base <- 0.0003 + 0.00003 * exp(0.085 * age)
-                  } else {
-                    qx_base <- 0.00035 + 0.000045 * exp(0.085 * age)
-                  }
-                }
-                
-                # Generate mortality rates for projection period
-                ages <- age:(age+term)
-                qx <- numeric(length(ages))
-                
-                for (j in 1:length(ages)) {
-                  current_age <- ages[j]
-                  if (table_type == "Standard Mortality") {
-                    if (gender == "male") {
-                      qx[j] <- 0.0005 + 0.00008 * exp(0.09 * current_age)
-                    } else if (gender == "female") {
-                      qx[j] <- 0.0004 + 0.00004 * exp(0.09 * current_age)
-                    } else {
-                      qx[j] <- 0.00045 + 0.00006 * exp(0.09 * current_age)
-                    }
-                  } else {
-                    if (gender == "male") {
-                      qx[j] <- 0.0004 + 0.00006 * exp(0.085 * current_age)
-                    } else if (gender == "female") {
-                      qx[j] <- 0.0003 + 0.00003 * exp(0.085 * current_age)
-                    } else {
-                      qx[j] <- 0.00035 + 0.000045 * exp(0.085 * current_age)
-                    }
-                  }
-                }
-                
-                # Calculate survival probabilities
-                px <- 1 - qx
-                
-                # Discount factors
-                v <- (1/(1+i))^(0:(length(ages)-1))
-                
-                # Compute present value
-                lx <- c(100000, rep(0, length(ages)-1))
-                for (j in 2:length(ages)) {
-                  lx[j] <- lx[j-1] * px[j-1]
-                }
-                
-                # For frequency adjustment
-                payment_times <- c()
-                survival_probs <- c()
-                
-                for (t in 1:(term*freq_factor)) {
-                  year_frac <- t / freq_factor
-                  if (year_frac <= length(ages) - 1) {
-                    payment_times <- c(payment_times, year_frac)
-                    
-                    # Interpolate survival probability
-                    year_idx <- floor(year_frac) + 1
-                    frac_part <- year_frac - floor(year_frac)
-                    
-                    if (year_idx < length(lx)) {
-                      interp_lx <- lx[year_idx] * (1-frac_part) + lx[year_idx+1] * frac_part
-                      survival_probs <- c(survival_probs, interp_lx / lx[1])
-                    } else {
-                      survival_probs <- c(survival_probs, lx[length(lx)] / lx[1])
-                    }
-                  }
-                }
-                
-                # Discount factors for payment times
-                payment_discount <- (1/(1+i))^payment_times
-                
-                # Present value calculation
-                pv <- payment * sum(survival_probs * payment_discount) / freq_factor
-                
-                # Expected duration calculation (approximate)
-                expected_duration <- sum(lx / lx[1]) - 0.5
-                if (expected_duration > term) expected_duration <- term
-              }
-              
-              # Calculate monthly equivalent
-              monthly_payment <- pv * (i/12) / (1 - 1/((1+i/12)^(term*12)))
-              
-              return(list(
-                present_value = pv,
-                expected_duration = expected_duration,
-                monthly_equivalent = monthly_payment
-              ))
-            }
+            # Use the actuarial service to calculate present value
+            pv_results = actuarial_service.calculate_present_value(
+                age,
+                payment,
+                interest_rate,
+                term,
+                frequency,  # pass the frequency name
+                table_type,
+                gender
+            )
             
-            result <- calculate_pv(age, payment, interest_rate, term, freq_factor, table_type, gender)
-            result
-            """
-            
-            # Run R code
-            robjects.r(r_code)
-            r_result = robjects.r(f"calculate_pv({age}, {payment}, {interest_rate}, {term}, {freq_factor}, '{table_type}', '{gender}')")
-            
+            if pv_results is None:
+                messagebox.showerror("Error", "Failed to calculate present value.")
+                return
+                
             # Extract results
-            pv = r_result.rx2('present_value')[0]
-            duration = r_result.rx2('expected_duration')[0]
-            monthly = r_result.rx2('monthly_equivalent')[0]
+            pv = pv_results.get('present_value')
+            duration = pv_results.get('expected_duration')
+            monthly = pv_results.get('monthly_equivalent')
             
             # Update result labels
             self.pv_result.config(text=f"${pv:,.2f}")

@@ -1,7 +1,9 @@
+"""
+Kaggle data exploration page.
+"""
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
-import threading
 import tempfile
 import importlib.util
 
@@ -11,12 +13,6 @@ if importlib.util.find_spec("pandas") is not None:
 else:
     pd = None
     
-# Check for numpy
-if importlib.util.find_spec("numpy") is not None:
-    import numpy as np
-else:
-    np = None
-
 # Check for matplotlib
 matplotlib_available = importlib.util.find_spec("matplotlib") is not None
 if matplotlib_available:
@@ -34,15 +30,8 @@ else:
 # Import the base page class
 from ui.pages.base_page import BasePage
 
-# Import kaggle helper module
-from utils.kaggle_helper import (
-    check_api_credentials, 
-    setup_credentials, 
-    get_dataset_list,
-    get_dataset_files,
-    download_dataset_file,
-    load_dataset_to_dataframe
-)
+# Import Kaggle service
+from services.kaggle.kaggle_service import kaggle_service
 
 
 class KagglePage(BasePage):
@@ -65,7 +54,7 @@ class KagglePage(BasePage):
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Check Kaggle credentials before proceeding
-        if not check_api_credentials():
+        if not kaggle_service.check_api_credentials():
             self.setup_credentials_ui()
         else:
             self.setup_main_ui()
@@ -158,8 +147,8 @@ class KagglePage(BasePage):
             )
             return
             
-        # Save credentials
-        if setup_credentials(username, key):
+        # Save credentials using the service
+        if kaggle_service.setup_credentials(username, key):
             messagebox.showinfo(
                 "Success", 
                 "Kaggle API credentials saved successfully!"
@@ -402,23 +391,14 @@ class KagglePage(BasePage):
         loading_item = self.dataset_tree.insert('', 'end', text='Loading...', values=('', ''))
         self.update_idletasks()
         
-        # Define thread function
-        def search_thread():
-            # Fetch datasets
-            datasets = get_dataset_list(
-                search_term=search_term,
-                max_size_mb=max_size,
-                file_type=file_type,
-                max_results=max_results
-            )
-            
-            # Update UI in main thread
-            self.after(10, lambda: self.update_dataset_list(datasets, loading_item))
-            
-        # Start search in a separate thread
-        thread = threading.Thread(target=search_thread)
-        thread.daemon = True
-        thread.start()
+        # Use the Kaggle service to search asynchronously
+        kaggle_service.search_datasets_async(
+            callback=lambda datasets: self.after(10, lambda: self.update_dataset_list(datasets, loading_item)),
+            search_term=search_term,
+            max_size_mb=max_size,
+            file_type=file_type,
+            max_results=max_results
+        )
     
     def update_dataset_list(self, datasets, loading_item):
         """Update the dataset list with search results."""
@@ -476,18 +456,11 @@ class KagglePage(BasePage):
         loading_item = self.files_tree.insert('', 'end', text='Loading...', values=(''))
         self.update_idletasks()
         
-        # Define thread function
-        def load_files_thread():
-            # Fetch files
-            files = get_dataset_files(self.current_dataset_ref)
-            
-            # Update UI in main thread
-            self.after(10, lambda: self.update_files_list(files, loading_item))
-            
-        # Start load in a separate thread
-        thread = threading.Thread(target=load_files_thread)
-        thread.daemon = True
-        thread.start()
+        # Use the Kaggle service to get files asynchronously
+        kaggle_service.get_dataset_files_async(
+            callback=lambda files: self.after(10, lambda: self.update_files_list(files, loading_item)),
+            dataset_ref=self.current_dataset_ref
+        )
     
     def update_files_list(self, files, loading_item):
         """Update the files list for the selected dataset."""
@@ -541,31 +514,19 @@ class KagglePage(BasePage):
         loading_label.pack(expand=True)
         self.update_idletasks()
         
-        # Define thread function
-        def download_thread():
-            # Download and load file
-            file_path = download_dataset_file(
-                self.current_dataset_ref,
-                filename,
-                output_dir=self.temp_dir
-            )
-            
-            if file_path:
-                df = load_dataset_to_dataframe(file_path)
-                self.current_df = df
-                
-                # Update UI in main thread
-                self.after(10, lambda: self.display_dataframe(df))
-            else:
-                self.after(10, lambda: self.show_download_error())
-            
-        # Start download in a separate thread
-        thread = threading.Thread(target=download_thread)
-        thread.daemon = True
-        thread.start()
+        # Use the Kaggle service to download and load the file asynchronously
+        kaggle_service.download_and_load_file_async(
+            callback=lambda df: self.after(10, lambda: self.display_dataframe(df)),
+            dataset_ref=self.current_dataset_ref,
+            filename=filename,
+            output_dir=self.temp_dir
+        )
     
     def display_dataframe(self, df):
         """Display a pandas DataFrame."""
+        # Save the current dataframe
+        self.current_df = df
+        
         # Clear the DataFrame frame
         for widget in self.df_frame.winfo_children():
             widget.destroy()
@@ -635,19 +596,6 @@ class KagglePage(BasePage):
         
         # Show visualization options
         self.setup_visualization_options(df)
-    
-    def show_download_error(self):
-        """Show an error message for failed download."""
-        # Clear the DataFrame frame
-        for widget in self.df_frame.winfo_children():
-            widget.destroy()
-            
-        error_label = ttk.Label(
-            self.df_frame,
-            text="Failed to download or open the file.",
-            foreground="red"
-        )
-        error_label.pack(expand=True)
     
     def setup_visualization_options(self, df):
         """Set up visualization options for the loaded DataFrame."""
@@ -846,7 +794,7 @@ class KagglePage(BasePage):
                         ax.set_xticks(range(len(categories)))
                         ax.set_xticklabels(categories)
                         if plt:
-                        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+                            plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
                         
                     ax.set_xlabel(x_col)
                     ax.set_ylabel(y_col)
