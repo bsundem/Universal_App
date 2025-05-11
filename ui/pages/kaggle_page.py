@@ -31,9 +31,8 @@ else:
 from ui.pages.content_page import ContentPage
 from utils.logging import get_logger
 
-# Import Kaggle services
-from services.kaggle.kaggle_service import kaggle_service
-from services.kaggle.kaggle_data_manager import kaggle_data_manager
+# Import services through container
+from services.container import get_kaggle_service, get_kaggle_data_manager
 
 
 # Get logger for this module
@@ -50,8 +49,10 @@ class KagglePage(ContentPage):
         self.current_dataset_ref = None
         self.current_file = None
         self.current_df = None
+        # Get the kaggle service from the container
+        self.kaggle_service = get_kaggle_service()
         # Use the same temp directory as the service
-        self.temp_dir = kaggle_service.temp_dir
+        self.temp_dir = self.kaggle_service.temp_dir
         logger.info("KagglePage initialized")
         
     def setup_ui(self):
@@ -61,7 +62,7 @@ class KagglePage(ContentPage):
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Check Kaggle credentials before proceeding
-        if not kaggle_service.check_api_credentials():
+        if not self.kaggle_service.check_api_credentials():
             self.setup_credentials_ui()
         else:
             self.setup_main_ui()
@@ -155,16 +156,16 @@ class KagglePage(ContentPage):
             return
             
         # Save credentials using the service
-        if kaggle_service.setup_credentials(username, key):
+        if self.kaggle_service.setup_credentials(username, key):
             messagebox.showinfo(
-                "Success", 
+                "Success",
                 "Kaggle API credentials saved successfully!"
             )
             # Switch to the main UI
             self.setup_main_ui()
         else:
             messagebox.showerror(
-                "Error", 
+                "Error",
                 "Failed to save credentials. Please try again."
             )
     
@@ -402,7 +403,7 @@ class KagglePage(ContentPage):
         self.update_idletasks()
         
         # Use the Kaggle service to search asynchronously
-        kaggle_service.search_datasets_async(
+        self.kaggle_service.search_datasets_async(
             callback=lambda datasets: self.after(10, lambda: self.update_dataset_list(datasets, loading_item)),
             search_term=search_term,
             max_size_mb=max_size,
@@ -480,7 +481,7 @@ class KagglePage(ContentPage):
         self.update_idletasks()
         
         # Use the Kaggle service to get files asynchronously
-        kaggle_service.get_dataset_files_async(
+        self.kaggle_service.get_dataset_files_async(
             callback=lambda files: self.after(10, lambda: self.update_files_list(files, loading_item)),
             dataset_ref=self.current_dataset_ref
         )
@@ -540,7 +541,7 @@ class KagglePage(ContentPage):
         self.update_idletasks()
         
         # Use the Kaggle service to download and load the file asynchronously
-        kaggle_service.download_and_load_file_async(
+        self.kaggle_service.download_and_load_file_async(
             callback=lambda df: self.after(10, lambda: self.display_dataframe(df)),
             dataset_ref=self.current_dataset_ref,
             filename=filename,
@@ -564,6 +565,9 @@ class KagglePage(ContentPage):
             )
             error_label.pack(expand=True)
             return
+
+        # Get the data manager from the container
+        kaggle_data_manager = get_kaggle_data_manager()
 
         # Check dependencies using the data manager
         dependencies = kaggle_data_manager.check_dependencies()
@@ -757,6 +761,9 @@ class KagglePage(ContentPage):
                 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
                 data_text.config(yscrollcommand=scrollbar.set)
 
+                # Get the data manager from the container
+                kaggle_data_manager = get_kaggle_data_manager()
+
                 # Get column summary using the data manager
                 summary_result = kaggle_data_manager.get_column_summary(df, x_col)
                 if summary_result.get("success", False):
@@ -779,6 +786,9 @@ class KagglePage(ContentPage):
             return
 
         try:
+            # Get the data manager from the container
+            kaggle_data_manager = get_kaggle_data_manager()
+
             # Use the data manager to prepare plot data
             plot_data = kaggle_data_manager.generate_plot_data(
                 df,
@@ -931,6 +941,9 @@ class KagglePage(ContentPage):
             return
 
         logger.info(f"Exporting data to: {file_path}")
+
+        # Get the data manager from the container
+        kaggle_data_manager = get_kaggle_data_manager()
 
         # Use the data manager to export the data
         result = kaggle_data_manager.export_dataframe(self.current_df, file_path)

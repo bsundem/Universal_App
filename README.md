@@ -28,7 +28,8 @@ Universal_App/
 │   ├── actuarial/           # Actuarial calculation services
 │   ├── interfaces/          # Service interfaces (ISP)
 │   ├── kaggle/              # Kaggle data services
-│   ├── provider.py          # Service provider (DIP)
+│   ├── container.py         # Dependency injection container (DIP)
+│   ├── provider.py          # Legacy service provider (being replaced)
 │   └── r_service.py         # R integration service
 ├── r_scripts/               # R scripts for specialized calculations
 │   ├── actuarial/           # Actuarial R scripts
@@ -120,18 +121,18 @@ The application follows a service-oriented architecture with interfaces:
 2. Services are organized by domain (e.g., `actuarial`, `kaggle`)
 3. Service interfaces define contracts in `services/interfaces/`
 4. Cross-cutting concerns have dedicated services (e.g., `r_service.py`)
-5. Services are accessed through a service provider to enforce the Dependency Inversion Principle
+5. Services are accessed through a dependency injection container to enforce the Dependency Inversion Principle
 6. Error handling is standardized through the error handling utilities
 7. Logging is consistent across all services
 
-#### Service Provider
+#### Dependency Injection Container
 
-The application uses a service provider pattern to implement the Dependency Inversion Principle:
+The application uses a proper dependency injection container to implement the Dependency Inversion Principle:
 
 ```python
-from services.provider import get_r_service, get_actuarial_service
+from services.container import get_r_service, get_actuarial_service
 
-# Get service implementations through the provider
+# Get service implementations through the container
 r_service = get_r_service()
 actuarial_service = get_actuarial_service()
 
@@ -141,6 +142,29 @@ if r_service.is_available():
 ```
 
 This ensures that components depend on abstractions (interfaces/protocols) rather than concrete implementations.
+
+#### Testing with the Container
+
+For testing, the container provides utilities to override service implementations with mocks:
+
+```python
+from services.container import override_provider, reset_overrides
+from unittest.mock import MagicMock
+
+# Create a mock implementation
+mock_r_service = MagicMock()
+mock_r_service.is_available.return_value = True
+
+# Override the service for testing
+override_provider("r_service", mock_r_service)
+
+# Run tests with the mock service
+
+# Reset all overrides when done
+reset_overrides()
+```
+
+This makes it easy to test components in isolation without dependencies on actual implementations.
 
 ### Design Principles
 
