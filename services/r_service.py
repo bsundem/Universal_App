@@ -46,13 +46,12 @@ class RService:
         """
         return self.r_available
     
-    def execute_script(self, script_path: str, **kwargs) -> Any:
+    def execute_script(self, script_path: str) -> Any:
         """
-        Execute an R script with the provided arguments.
+        Execute an R script.
         
         Args:
             script_path (str): Path to the R script, relative to the r_scripts directory
-            **kwargs: Arguments to pass to the R script
             
         Returns:
             Any: Result from R execution, or None if execution failed
@@ -78,14 +77,77 @@ class RService:
             print(f"Error executing R script: {str(e)}")
             return None
     
-    def run_function(self, function_name: str, script_path: Optional[str] = None, 
-                    **kwargs) -> Any:
+    def run_r_code(self, r_code: str) -> Any:
         """
-        Run an R function with the provided arguments.
+        Run arbitrary R code.
         
         Args:
-            function_name (str): Name of the R function to run
-            script_path (str, optional): Path to the R script to load first
+            r_code (str): R code to execute
+            
+        Returns:
+            Any: Result from R execution, or None if execution failed
+        """
+        if not self.r_available:
+            print("R is not available. Please install rpy2 package.")
+            return None
+            
+        try:
+            # Execute the R code
+            return robjects.r(r_code)
+        except Exception as e:
+            print(f"Error executing R code: {str(e)}")
+            return None
+    
+    def set_variable(self, name: str, value: Any) -> bool:
+        """
+        Set a variable in the R environment.
+        
+        Args:
+            name (str): Name of the variable
+            value (Any): Value to assign
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.r_available:
+            print("R is not available. Please install rpy2 package.")
+            return False
+            
+        try:
+            # Convert Python value to R value
+            if isinstance(value, str):
+                r_value = robjects.StrVector([value])
+            elif isinstance(value, bool):
+                r_value = robjects.BoolVector([value])
+            elif isinstance(value, (int, float)):
+                r_value = robjects.FloatVector([value])
+            elif isinstance(value, (list, tuple)):
+                if all(isinstance(x, (int, float)) for x in value):
+                    r_value = robjects.FloatVector(value)
+                elif all(isinstance(x, str) for x in value):
+                    r_value = robjects.StrVector(value)
+                elif all(isinstance(x, bool) for x in value):
+                    r_value = robjects.BoolVector(value)
+                else:
+                    print(f"Mixed type lists are not supported for R conversion: {value}")
+                    return False
+            else:
+                # For other types, use pandas2ri conversion
+                r_value = value
+                
+            # Assign to R environment
+            robjects.r.assign(name, r_value)
+            return True
+        except Exception as e:
+            print(f"Error setting R variable '{name}': {str(e)}")
+            return False
+    
+    def call_function(self, function_name: str, **kwargs) -> Any:
+        """
+        Call an R function with the provided arguments, setting variables first.
+        
+        Args:
+            function_name (str): Name of the R function to call
             **kwargs: Arguments to pass to the R function
             
         Returns:
@@ -96,52 +158,19 @@ class RService:
             return None
             
         try:
-            # Source the script if provided
-            if script_path:
-                full_path = os.path.join(self.scripts_dir, script_path)
-                robjects.r(f'source("{full_path}")')
+            # Set each argument as a variable in the R environment
+            for name, value in kwargs.items():
+                self.set_variable(name, value)
+                
+            # Build function call with argument names
+            args_list = ", ".join(kwargs.keys())
+            r_code = f"{function_name}({args_list})"
             
-            # Build the function call string
-            args_str = ", ".join([f"{k}={self._convert_arg_to_r(v)}" for k, v in kwargs.items()])
-            r_call = f"{function_name}({args_str})"
-            
-            # Execute the R function
-            result = robjects.r(r_call)
-            return result
+            # Call the function
+            return robjects.r(r_code)
         except Exception as e:
-            print(f"Error executing R function: {str(e)}")
+            print(f"Error calling R function '{function_name}': {str(e)}")
             return None
-    
-    def _convert_arg_to_r(self, value: Any) -> str:
-        """
-        Convert a Python value to a string representation for R.
-        
-        Args:
-            value: Python value to convert
-            
-        Returns:
-            str: R code representation of the value
-        """
-        if isinstance(value, str):
-            # Escape quotes in strings
-            escaped = value.replace('"', '\\"')
-            return f'"{escaped}"'
-        elif isinstance(value, bool):
-            # Convert Python bool to R logical
-            return "TRUE" if value else "FALSE"
-        elif isinstance(value, (list, tuple)):
-            # Convert Python list to R vector
-            items = [self._convert_arg_to_r(item) for item in value]
-            return f"c({', '.join(items)})"
-        elif isinstance(value, dict):
-            # Convert Python dict to R list
-            items = [f"{self._convert_arg_to_r(k)}={self._convert_arg_to_r(v)}" for k, v in value.items()]
-            return f"list({', '.join(items)})"
-        else:
-            # Numbers and None can be converted directly
-            if value is None:
-                return "NULL"
-            return str(value)
     
     def run_actuarial_mortality(self, age_from: int, age_to: int, 
                               interest_rate: float, table_type: str, 
@@ -164,7 +193,7 @@ class RService:
         self.execute_script(script_path)
         
         # Call the calculate_mortality function
-        return self.run_function(
+        return self.call_function(
             "calculate_mortality",
             age_from=age_from,
             age_to=age_to,
@@ -196,7 +225,7 @@ class RService:
         self.execute_script(script_path)
         
         # Call the calculate_pv function
-        return self.run_function(
+        return self.call_function(
             "calculate_pv",
             age=age,
             payment=payment,
