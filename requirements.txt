@@ -1,9 +1,20 @@
+# Core dependencies
+dependency-injector>=4.41.0
+requests>=2.26.0
+
+# Development tools
 pytest>=7.0.0
 black>=23.0.0
 flake8>=6.0.0
+
+# Optional dependencies for R integration
 rpy2>=3.5.0
+
+# Optional dependencies for data analysis
 pandas>=1.3.0
 numpy>=1.20.0
 matplotlib>=3.4.0
+
+# Optional dependencies for Kaggle integration
 kaggle>=1.5.0
-Pillow>=8.0.0
+Pillow>=8.0.0  # For image handling
