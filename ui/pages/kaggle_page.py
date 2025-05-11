@@ -43,16 +43,21 @@ class KagglePage(ContentPage):
     """Page for fetching and visualizing data from Kaggle."""
 
     def __init__(self, parent, controller):
+        # Initialize the kaggle service before calling super() to ensure it's available
+        # when setup_ui() is called from ContentPage.__init__
+        self.kaggle_service = get_kaggle_service()
+        self.kaggle_data_manager = get_kaggle_data_manager()
+        self.temp_dir = self.kaggle_service.temp_dir
+
+        # Now call super with all services initialized
         super().__init__(parent, title="Kaggle Data Explorer")
+
         self.controller = controller
         self.current_dataset = None
         self.current_dataset_ref = None
         self.current_file = None
         self.current_df = None
-        # Get the kaggle service from the container
-        self.kaggle_service = get_kaggle_service()
-        # Use the same temp directory as the service
-        self.temp_dir = self.kaggle_service.temp_dir
+
         logger.info("KagglePage initialized")
         
     def setup_ui(self):
