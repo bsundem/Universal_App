@@ -4,7 +4,7 @@ Unit tests for the Actuarial service.
 import pytest
 from unittest.mock import patch, MagicMock
 import pandas as pd
-from services.actuarial.actuarial_service import ActuarialService, actuarial_service as actual_service
+from services.actuarial.actuarial_service import ActuarialService
 
 
 class TestActuarialService:
@@ -13,9 +13,13 @@ class TestActuarialService:
     @pytest.fixture
     def actuarial_service(self, mock_r_service):
         """Fixture to create an Actuarial service for testing."""
-        with patch('services.actuarial.actuarial_service.r_service', mock_r_service):
-            service = ActuarialService()
-            return service
+        # Create a service instance with mocked R service
+        service = ActuarialService()
+        
+        # Manually set the R service
+        service._r_service = mock_r_service
+        
+        return service
 
     def test_is_r_available(self, actuarial_service, mock_r_service):
         """Test checking if R is available."""
@@ -60,7 +64,8 @@ class TestActuarialService:
         
         # Mock pandas to return a dataframe
         with patch('services.actuarial.actuarial_service.pd') as mock_pd:
-            mock_pd.DataFrame.return_value = "mortality dataframe"
+            mock_df = MagicMock()
+            mock_pd.DataFrame.return_value = mock_df
             
             # Call the method
             result = actuarial_service.calculate_mortality_data(
@@ -72,7 +77,7 @@ class TestActuarialService:
             )
             
             # Check the result
-            assert result == "mortality dataframe"
+            assert result == mock_df
             mock_r_service.execute_script.assert_called_once_with("actuarial/mortality.R")
             mock_r_service.call_function.assert_called_once_with(
                 "calculate_mortality",

@@ -42,7 +42,7 @@ class ActuarialService:
         """Get the R service from the provider."""
         if self._r_service is None:
             # Import here to avoid circular imports
-            from services.provider import get_r_service
+            from services.container import get_r_service
             self._r_service = get_r_service()
         return self._r_service
 

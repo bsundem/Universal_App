@@ -661,7 +661,7 @@ The application follows a service-oriented architecture with interfaces:
 
 #### Dependency Injection Container
 
-The application uses a proper dependency injection container to implement the Dependency Inversion Principle:
+The application uses a proper dependency injection container based on the `dependency-injector` package to implement the Dependency Inversion Principle:
 
 ```python
 from services.container import get_r_service, get_actuarial_service
@@ -675,7 +675,39 @@ if r_service.is_available():
     # Do something with the R service
 ```
 
-This ensures that components depend on abstractions (interfaces/protocols) rather than concrete implementations.
+##### Container Implementation
+
+The container is implemented in `services/container.py` and follows these key principles:
+
+1. **Interface-based design**: Services are accessed through their protocol interfaces
+2. **Singleton management**: The container manages service lifecycles (typically as singletons)
+3. **Lazy initialization**: Services are only instantiated when first requested
+4. **Clear access patterns**: Helper functions provide type-safe access to services
+
+```python
+# Sample container implementation
+from dependency_injector import containers, providers
+
+class Container(containers.DeclarativeContainer):
+    """Dependency Injection Container for the Universal App."""
+
+    # Configuration provider
+    config = providers.Configuration()
+
+    # Service providers
+    r_service_provider = providers.Singleton(lambda: r_service)
+    kaggle_service_provider = providers.Singleton(lambda: kaggle_service)
+    actuarial_service_provider = providers.Singleton(lambda: actuarial_service)
+
+    # Additional providers as needed...
+
+# Helper function example
+def get_r_service() -> RServiceInterface:
+    """Get the R service implementation."""
+    return container.r_service_provider()
+```
+
+This ensures that components depend on abstractions (interfaces/protocols) rather than concrete implementations, adhering to the Dependency Inversion Principle.
 
 #### Testing with the Container
 
@@ -693,9 +725,37 @@ mock_r_service.is_available.return_value = True
 override_provider("r_service", mock_r_service)
 
 # Run tests with the mock service
+assert get_r_service().is_available() is True
+assert get_r_service() is mock_r_service  # Verify we get our mock
 
 # Reset all overrides when done
 reset_overrides()
+```
+
+##### Advanced Testing Features
+
+The container also provides advanced testing capabilities:
+
+1. **Reset mechanism**: Properly resets all service provider overrides between tests
+2. **Provider validation**: Validates that overridden service names exist
+3. **Object provider**: Uses `providers.Object` for direct object injection
+4. **Integration with pytest fixtures**: Special fixtures automatically set up and tear down mocks
+
+```python
+# Example pytest fixture
+@pytest.fixture
+def mock_r_service():
+    """Provide a mocked R service."""
+    mock_service = MagicMock()
+    mock_service.is_available.return_value = True
+
+    # Override in the container
+    override_provider("r_service", mock_service)
+
+    yield mock_service
+
+    # Reset after the test
+    reset_overrides()
 ```
 
 This makes it easy to test components in isolation without dependencies on actual implementations.

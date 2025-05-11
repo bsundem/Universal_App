@@ -103,8 +103,17 @@ def override_provider(provider_name: str, implementation: object) -> None:
 
 def reset_overrides() -> None:
     """Reset all provider overrides."""
-    # Reset each provider individually
-    for attr_name in dir(container):
-        if attr_name.endswith('_provider'):
-            provider = getattr(container, attr_name)
-            provider.reset_override()
+    # Create new container instances
+    # This handles the issue with lambda functions that don't have reset_override
+    from services.r_service import r_service
+    from services.actuarial.actuarial_service import actuarial_service
+    from services.actuarial.actuarial_data_manager import actuarial_data_manager
+    from services.kaggle.kaggle_service import kaggle_service
+    from services.kaggle.kaggle_data_manager import kaggle_data_manager
+
+    # Reset providers by recreating them
+    container.r_service_provider = providers.Singleton(lambda: r_service)
+    container.actuarial_service_provider = providers.Singleton(lambda: actuarial_service)
+    container.actuarial_data_manager_provider = providers.Singleton(lambda: actuarial_data_manager)
+    container.kaggle_service_provider = providers.Singleton(lambda: kaggle_service)
+    container.kaggle_data_manager_provider = providers.Singleton(lambda: kaggle_data_manager)

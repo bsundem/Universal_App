@@ -35,19 +35,33 @@ class TestKaggleService:
     def test_check_api_credentials_valid_file(self, kaggle_service, monkeypatch, tmp_path):
         """Test checking API credentials with a valid file."""
         # Create a temporary credential file
-        temp_file = tmp_path / "kaggle.json"
+        temp_dir = tmp_path / ".kaggle"
+        temp_dir.mkdir(exist_ok=True)
+        temp_file = temp_dir / "kaggle.json"
         with open(temp_file, 'w') as f:
             json.dump({"username": "test_user", "key": "test_key"}, f)
 
-        # Mock os.path.exists and expanduser
-        monkeypatch.setattr(os.path, 'exists', lambda path: True)
-        monkeypatch.setattr(os.path, 'expanduser', lambda path: str(temp_file))
+        # Mock os.path.exists to return True for any path
+        def mock_exists(path):
+            return True
+        monkeypatch.setattr(os.path, 'exists', mock_exists)
 
-        # Mock the json.load function
-        original_load = json.load
-        def mock_load(file_obj):
-            return {"username": "test_user", "key": "test_key"}
-        monkeypatch.setattr(json, 'load', mock_load)
+        # Mock os.path.expanduser to return our temp file path
+        def mock_expanduser(path):
+            if "~/.kaggle" in path:
+                return str(temp_dir)
+            return path
+        monkeypatch.setattr(os.path, 'expanduser', mock_expanduser)
+
+        # Mock open to use our temp file when opening kaggle.json
+        original_open = open
+        def mock_open(*args, **kwargs):
+            if "kaggle.json" in str(args[0]):
+                return original_open(temp_file, *args[1:], **kwargs)
+            return original_open(*args, **kwargs)
+
+        # Apply the mock to the built-in open function
+        monkeypatch.setattr('builtins.open', mock_open)
 
         # Call the method
         result = kaggle_service.check_api_credentials()
