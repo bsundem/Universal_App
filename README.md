@@ -10,6 +10,7 @@ A unified application framework that hosts multiple projects in a single interfa
 - Service-oriented architecture for business logic
 - R integration for specialized calculations
 - Kaggle data exploration capabilities
+- Comprehensive testing framework
 
 ## Project Structure
 
@@ -23,6 +24,10 @@ Universal_App/
 ├── r_scripts/          # R scripts for specialized calculations
 │   ├── actuarial/      # Actuarial R scripts
 │   └── common/         # Common R utilities
+├── tests/              # Testing framework
+│   ├── unit/           # Unit tests
+│   ├── integration/    # Integration tests
+│   └── functional/     # Functional tests
 ├── ui/                 # User interface components
 │   ├── components/     # Reusable UI components
 │   └── pages/          # Application pages
@@ -102,6 +107,40 @@ For R-based calculations:
 2. Use the `r_service` to execute R code and exchange data
 3. Create domain-specific services that use the R service
 
+### Testing Framework
+
+The project includes a comprehensive testing framework:
+
+1. **Unit Tests**: Test individual components in isolation
+   ```bash
+   # Run all unit tests
+   pytest tests/unit
+   
+   # Run unit tests for specific components
+   pytest tests/unit/services
+   ```
+
+2. **Integration Tests**: Test interactions between components
+   ```bash
+   pytest tests/integration
+   ```
+
+3. **Functional Tests**: Test the system from a user perspective
+   ```bash
+   pytest tests/functional
+   ```
+
+4. **Test Categories**: Tests are categorized with markers
+   ```bash
+   # Run only tests that require R
+   pytest -m r_dependent
+   
+   # Skip tests that require R
+   pytest -k "not r_dependent"
+   ```
+
+For more details on the testing framework, see the [tests README](tests/README.md).
+
 ### Code Style
 
 This project uses:
@@ -110,12 +149,6 @@ This project uses:
 
 Run formatting and linting:
 ```bash
-black core ui utils services r_scripts
-flake8 core ui utils services
-```
-
-### Testing
-
-```bash
-pytest
+black core ui utils services r_scripts tests
+flake8 core ui utils services tests
 ```
