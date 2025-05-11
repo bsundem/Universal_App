@@ -51,19 +51,19 @@ class Sidebar:
         """Setup the navigation buttons."""
         nav_items = [
             {"name": "Home", "id": 0},
-            {"name": "Project One", "id": 1},
-            {"name": "Project Two", "id": 2},
+            {"name": "Actuarial Tools", "id": 1},
+            {"name": "Kaggle Explorer", "id": 2},
             {"name": "Project Three", "id": 3},
             {"name": "Settings", "id": 4}
         ]
-        
+
         # Variable to track the selected button
         self.selected_btn = tk.IntVar(value=0)
-        
+
         for item in nav_items:
             # Create a custom styled button for each nav item
             button = ttk.Radiobutton(
-                self.frame, 
+                self.frame,
                 text=item["name"],
                 value=item["id"],
                 variable=self.selected_btn,

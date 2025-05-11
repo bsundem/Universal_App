@@ -4,6 +4,8 @@ from ui.components.sidebar import Sidebar
 from ui.pages.home_page import HomePage
 from ui.pages.project_page import ProjectPage
 from ui.pages.settings_page import SettingsPage
+from ui.pages.actuarial_page import ActuarialPage
+from ui.pages.kaggle_page import KagglePage
 
 class MainWindow:
     """Main application window using Tkinter."""
@@ -43,16 +45,16 @@ class MainWindow:
         """Setup the application pages."""
         # Create pages
         home_page = HomePage(self.content_frame)
-        project_one = ProjectPage(self.content_frame, "Project One")
-        project_two = ProjectPage(self.content_frame, "Project Two")
+        actuarial_page = ActuarialPage(self.content_frame, self)
+        kaggle_page = KagglePage(self.content_frame, self)
         project_three = ProjectPage(self.content_frame, "Project Three")
         settings_page = SettingsPage(self.content_frame)
-        
+
         # Add pages to our list
         self.pages = [
             home_page,
-            project_one,
-            project_two,
+            actuarial_page,
+            kaggle_page,
             project_three,
             settings_page
         ]
