@@ -2,7 +2,8 @@
   "app": {
     "debug": false,
     "title": "Universal App",
-    "theme": "default",
+    "version": "1.0.0",
+    "theme": "cosmo",
     "temp_dir": null,
     "data_dir": "data"
   },
@@ -10,22 +11,39 @@
     "level": "INFO",
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     "date_format": "%Y-%m-%d %H:%M:%S",
-    "file": null,
+    "file": "universal_app.log",
     "max_size": 10485760,
     "backup_count": 5
   },
-  "r": {
-    "enabled": true,
-    "scripts_dir": "r_scripts",
-    "libraries": [
-      "base",
-      "stats"
-    ]
+  "services": {
+    "r_integration": {
+      "enabled": true,
+      "scripts_dir": "r_scripts",
+      "libraries": [
+        "base",
+        "stats",
+        "lifecontingencies"
+      ]
+    },
+    "actuarial": {
+      "enabled": true,
+      "data_dir": "data/actuarial"
+    },
+    "finance": {
+      "enabled": true,
+      "data_dir": "data/finance"
+    }
   },
-  "kaggle": {
-    "enabled": true,
-    "credentials_file": "~/.kaggle/kaggle.json",
-    "timeout": 60,
-    "max_dataset_size_mb": 1000
+  "ui": {
+    "window": {
+      "title": "Universal App",
+      "width": 1280,
+      "height": 800,
+      "min_width": 800,
+      "min_height": 600
+    },
+    "sidebar": {
+      "width": 240
+    }
   }
 }

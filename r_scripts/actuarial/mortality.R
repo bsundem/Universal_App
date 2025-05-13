@@ -1,71 +1,131 @@
-# Mortality Table Calculations
-# This script provides functions for calculating mortality tables
+# Mortality table calculations
+# This script provides functions for calculating mortality tables and life expectancy
 
-calculate_mortality <- function(age_from, age_to, interest_rate, table_type, gender) {
-  # This is a simplified example
-  # In a real application, you would use actual mortality tables
+# Function to get available mortality tables
+get_available_tables <- function() {
+  # In a real application, this would query available tables from a database
+  # For this example, we'll just return some standard tables
+  tables <- list(
+    id = c("soa_2012", "cso_2001"),
+    name = c("SOA 2012 IAM", "CSO 2001"),
+    description = c(
+      "Society of Actuaries 2012 Individual Annuity Mortality",
+      "2001 Commissioners Standard Ordinary Mortality Table"
+    )
+  )
   
-  ages <- age_from:age_to
+  return(tables)
+}
+
+# Function to get a mortality table based on type
+get_mortality_table <- function(table_type, gender) {
+  # In a real application, this would load real mortality data
+  # For this example, we'll generate some sample data
   
-  # Different mortality rates based on table type and gender
-  if (table_type == "Standard Mortality") {
+  # Base mortality rates by age
+  ages <- 0:120
+  
+  # Generate qx (mortality rates) with a simplified Gompertz-Makeham model
+  # qx = A + B*exp(C*age)
+  if (table_type == "soa_2012") {
+    # Parameters for SOA 2012
     if (gender == "male") {
-      # Simplified Gompertz-Makeham for illustration
-      qx <- 0.0005 + 0.00008 * exp(0.09 * ages)
+      A <- 0.0001
+      B <- 0.00005
+      C <- 0.095
     } else if (gender == "female") {
-      qx <- 0.0004 + 0.00004 * exp(0.09 * ages)
-    } else {
-      # Unisex
-      qx <- 0.00045 + 0.00006 * exp(0.09 * ages)
-    }
-  } else if (table_type == "Annuitant Mortality") {
-    # Annuitant tables typically have lower mortality rates
-    if (gender == "male") {
-      qx <- 0.0004 + 0.00006 * exp(0.085 * ages)
-    } else if (gender == "female") {
-      qx <- 0.0003 + 0.00003 * exp(0.085 * ages)
-    } else {
-      qx <- 0.00035 + 0.000045 * exp(0.085 * ages)
+      A <- 0.0001
+      B <- 0.00004
+      C <- 0.09
+    } else { # unisex
+      A <- 0.0001
+      B <- 0.000045
+      C <- 0.0925
     }
   } else {
-    # Custom mortality (simplified)
-    qx <- 0.0003 + 0.00005 * exp(0.08 * ages)
+    # Parameters for CSO 2001
+    if (gender == "male") {
+      A <- 0.0001
+      B <- 0.00007
+      C <- 0.10
+    } else if (gender == "female") {
+      A <- 0.0001
+      B <- 0.00005
+      C <- 0.095
+    } else { # unisex
+      A <- 0.0001
+      B <- 0.00006
+      C <- 0.0975
+    }
   }
   
-  # Calculate survival probabilities
-  px <- 1 - qx
-  lx <- c(100000, rep(0, length(ages)-1))
-  for (i in 2:length(ages)) {
-    lx[i] <- lx[i-1] * px[i-1]
-  }
+  # Generate qx values (probability of death at each age)
+  qx <- pmin(A + B * exp(C * ages), 1.0)
   
-  # Calculate life expectancy
-  ex <- rep(0, length(ages))
-  for (i in 1:length(ages)) {
-    future_lx <- c(lx[i:length(lx)])
-    future_lx <- future_lx / future_lx[1]
-    ex[i] <- sum(future_lx) - 0.5
-  }
-  
-  # Discount factors
-  v <- (1/(1+interest_rate))^(0:(length(ages)-1))
-  
-  # Calculate annuity factors
-  ax <- rep(0, length(ages))
-  for (i in 1:length(ages)) {
-    future_lx <- lx[i:length(lx)] / lx[i]
-    ax[i] <- sum(future_lx * v[1:length(future_lx)])
-  }
-  
-  # Prepare results
+  # Return the table
   result <- data.frame(
     Age = ages,
-    qx = qx,
-    px = px,
-    lx = lx,
-    ex = ex,
-    ax = ax
+    qx = qx
   )
   
   return(result)
 }
+
+# Calculate mortality data for a given age range and interest rate
+calculate_mortality <- function(age_from, age_to, interest_rate, table_type, gender) {
+  # Validate inputs
+  age_from <- as.integer(age_from)
+  age_to <- as.integer(age_to)
+  interest_rate <- as.numeric(interest_rate)
+  
+  if (age_from < 0 || age_to > 120 || age_from > age_to) {
+    stop("Invalid age range. Must be between 0 and 120, and age_from must be <= age_to.")
+  }
+  
+  if (interest_rate < 0 || interest_rate > 1) {
+    stop("Invalid interest rate. Must be between 0 and 1.")
+  }
+  
+  # Get the mortality table
+  full_table <- get_mortality_table(table_type, gender)
+  
+  # Filter to the requested age range
+  table <- full_table[full_table$Age >= age_from & full_table$Age <= age_to, ]
+  
+  # Calculate additional actuarial values
+  # px = probability of survival (1 - qx)
+  table$px <- 1 - table$qx
+  
+  # lx = number of lives at age x (starting with 100,000 at age_from)
+  lx <- numeric(nrow(table))
+  lx[1] <- 100000
+  for (i in 2:length(lx)) {
+    lx[i] <- lx[i-1] * table$px[i-1]
+  }
+  table$lx <- lx
+  
+  # ex = life expectancy
+  ex <- numeric(nrow(table))
+  for (i in 1:length(ex)) {
+    ages_i <- i:nrow(table)
+    ex[i] <- sum(lx[ages_i] / lx[i]) - 0.5
+  }
+  table$ex <- ex
+  
+  # ax = present value of a whole life annuity of 1 per year
+  v <- 1 / (1 + interest_rate)  # discount factor
+  ax <- numeric(nrow(table))
+  for (i in 1:length(ax)) {
+    tpx <- numeric(nrow(table) - i + 1)
+    tpx[1] <- 1  # 0px = 1
+    for (j in 2:length(tpx)) {
+      tpx[j] <- tpx[j-1] * table$px[i + j - 2]
+    }
+    ax[i] <- sum(tpx * v^(0:(length(tpx)-1)))
+  }
+  table$ax <- ax
+  
+  # Return the results
+  return(table)
+}
+EOF < /dev/null

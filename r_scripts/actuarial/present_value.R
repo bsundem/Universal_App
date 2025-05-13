@@ -1,127 +1,81 @@
-# Present Value Calculations
+# Present value calculations for actuarial applications
 # This script provides functions for calculating present values of annuities
 
-calculate_pv <- function(age, payment, interest_rate, term, freq_factor, 
-                       table_type, gender) {
-  # Convert to equivalent annual interest rate
-  i <- interest_rate
+# Calculate present value of an annuity
+calculate_pv <- function(age, payment, interest_rate, term, freq_factor, table_type, gender) {
+  # Validate inputs
+  age <- as.integer(age)
+  payment <- as.numeric(payment)
+  interest_rate <- as.numeric(interest_rate)
+  term <- as.integer(term)
+  freq_factor <- as.integer(freq_factor)
+  
+  if (age < 0 || age > 120) {
+    stop("Invalid age. Must be between 0 and 120.")
+  }
+  
+  if (payment <= 0) {
+    stop("Payment must be positive.")
+  }
+  
+  if (interest_rate < 0 || interest_rate > 1) {
+    stop("Invalid interest rate. Must be between 0 and 1.")
+  }
+  
+  if (term <= 0) {
+    stop("Term must be positive.")
+  }
+  
+  if (freq_factor <= 0) {
+    stop("Frequency factor must be positive.")
+  }
+  
+  # Source the mortality script to get the calculation functions
+  source("r_scripts/actuarial/mortality.R")
+  
+  # Get mortality data for the age range
+  mortality_data <- calculate_mortality(age, age + term, interest_rate, table_type, gender)
+  
+  # Calculate present value
+  # For a term certain annuity due with n payments of 1:
+  # annuity_due = (1 - v^n) / (1 - v) where v = 1/(1+i)
+  
+  # Adjust interest rate for payment frequency
+  i_adj <- (1 + interest_rate)^(1/freq_factor) - 1
+  v_adj <- 1 / (1 + i_adj)
   
   # Number of payments
   n <- term * freq_factor
   
-  if (table_type == "None (Fixed Term)") {
-    # Fixed term annuity calculation
-    v <- 1/(1+i)
-    if (i == 0) {
-      pv <- payment * n / freq_factor
-    } else {
-      pv <- payment * (1 - v^n) / (i * freq_factor)
-    }
-    
-    expected_duration <- term
-    
-  } else {
-    # Life contingent annuity
-    # Simplified mortality calculation for demonstration
-    
-    # Different mortality rates based on table type and gender
-    if (table_type == "Standard Mortality") {
-      if (gender == "male") {
-        # Simplified Gompertz-Makeham for illustration
-        qx_base <- 0.0005 + 0.00008 * exp(0.09 * age)
-      } else if (gender == "female") {
-        qx_base <- 0.0004 + 0.00004 * exp(0.09 * age)
-      } else {
-        # Unisex
-        qx_base <- 0.00045 + 0.00006 * exp(0.09 * age)
-      }
-    } else if (table_type == "Annuitant Mortality") {
-      # Annuitant tables typically have lower mortality rates
-      if (gender == "male") {
-        qx_base <- 0.0004 + 0.00006 * exp(0.085 * age)
-      } else if (gender == "female") {
-        qx_base <- 0.0003 + 0.00003 * exp(0.085 * age)
-      } else {
-        qx_base <- 0.00035 + 0.000045 * exp(0.085 * age)
-      }
-    }
-    
-    # Generate mortality rates for projection period
-    ages <- age:(age+term)
-    qx <- numeric(length(ages))
-    
-    for (j in 1:length(ages)) {
-      current_age <- ages[j]
-      if (table_type == "Standard Mortality") {
-        if (gender == "male") {
-          qx[j] <- 0.0005 + 0.00008 * exp(0.09 * current_age)
-        } else if (gender == "female") {
-          qx[j] <- 0.0004 + 0.00004 * exp(0.09 * current_age)
-        } else {
-          qx[j] <- 0.00045 + 0.00006 * exp(0.09 * current_age)
-        }
-      } else {
-        if (gender == "male") {
-          qx[j] <- 0.0004 + 0.00006 * exp(0.085 * current_age)
-        } else if (gender == "female") {
-          qx[j] <- 0.0003 + 0.00003 * exp(0.085 * current_age)
-        } else {
-          qx[j] <- 0.00035 + 0.000045 * exp(0.085 * current_age)
-        }
-      }
-    }
-    
-    # Calculate survival probabilities
-    px <- 1 - qx
-    
-    # Discount factors
-    v <- (1/(1+i))^(0:(length(ages)-1))
-    
-    # Compute present value
-    lx <- c(100000, rep(0, length(ages)-1))
-    for (j in 2:length(ages)) {
-      lx[j] <- lx[j-1] * px[j-1]
-    }
-    
-    # For frequency adjustment
-    payment_times <- c()
-    survival_probs <- c()
-    
-    for (t in 1:(term*freq_factor)) {
-      year_frac <- t / freq_factor
-      if (year_frac <= length(ages) - 1) {
-        payment_times <- c(payment_times, year_frac)
-        
-        # Interpolate survival probability
-        year_idx <- floor(year_frac) + 1
-        frac_part <- year_frac - floor(year_frac)
-        
-        if (year_idx < length(lx)) {
-          interp_lx <- lx[year_idx] * (1-frac_part) + lx[year_idx+1] * frac_part
-          survival_probs <- c(survival_probs, interp_lx / lx[1])
-        } else {
-          survival_probs <- c(survival_probs, lx[length(lx)] / lx[1])
-        }
-      }
-    }
-    
-    # Discount factors for payment times
-    payment_discount <- (1/(1+i))^payment_times
-    
-    # Present value calculation
-    pv <- payment * sum(survival_probs * payment_discount) / freq_factor
-    
-    # Expected duration calculation (approximate)
-    expected_duration <- sum(lx / lx[1]) - 0.5
-    if (expected_duration > term) expected_duration <- term
-  }
+  # Annuity factor for term certain
+  a_n <- (1 - v_adj^n) / (1 - v_adj)
   
-  # Calculate monthly equivalent
-  monthly_payment <- pv * (i/12) / (1 - 1/((1+i/12)^(term*12)))
+  # Adjust for mortality
+  lx_start <- mortality_data$lx[1]  # lives at starting age
+  lx_values <- mortality_data$lx[1:(term+1)]  # lives at each future age
   
-  return(list(
-    present_value = pv,
+  # Calculate expected number of payments
+  num_payments <- sum(lx_values[1:term] / lx_start)
+  
+  # Expected duration (in years)
+  expected_duration <- num_payments / freq_factor
+  
+  # Mortality-adjusted annuity factor
+  a_x <- a_n * (expected_duration / term)
+  
+  # Present value
+  present_value <- payment * a_x
+  
+  # Monthly equivalent (assuming payment is annual)
+  monthly_payment <- payment / 12
+  monthly_equivalent <- monthly_payment * a_x * (freq_factor / 12)
+  
+  # Return the results
+  result <- list(
+    present_value = present_value,
     expected_duration = expected_duration,
-    monthly_equivalent = monthly_payment
-  ))
+    monthly_equivalent = monthly_equivalent
+  )
+  
+  return(result)
 }

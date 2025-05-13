@@ -10,19 +10,20 @@ This repository serves as a container for multiple projects until they grow larg
 
 - `.venv/`: Python virtual environment directory
 - `.vscode/`: VSCode configuration
+- `config.json`: Main configuration file
 - `config.json.template`: Configuration template file
 - `core/`: Core application functionality
   - `app.py`: Main application class
-  - `config.py`: Configuration management system
+  - `config.py`: Configuration management system with Pydantic
 - `services/`: Business logic services
   - `actuarial/`: Actuarial calculation services
+  - `finance/`: Financial calculation services
   - `interfaces/`: Service interfaces (Interface Segregation Principle)
-  - `kaggle/`: Kaggle data services
   - `container.py`: Dependency injection container (Dependency Inversion Principle)
-  - `provider.py`: Legacy service provider (deprecated)
   - `r_service.py`: R integration service
 - `r_scripts/`: R scripts for specialized calculations
-  - `actuarial/`: Actuarial R scripts
+  - `actuarial/`: Actuarial R scripts (mortality tables, present value, etc.)
+  - `finance/`: Finance R scripts (yield curves, option pricing, etc.)
   - `common/`: Common R utilities
 - `tests/`: Testing framework
   - `unit/`: Unit tests for individual components
@@ -34,33 +35,32 @@ This repository serves as a container for multiple projects until they grow larg
     - `page_container.py`: Page container component (Composition over Inheritance)
     - `sidebar.py`: Navigation sidebar component
   - `pages/`: Application pages
-    - `content_page.py`: Modern content page (composition approach)
-    - Various application pages using the composition pattern
+    - `home_page.py`: Application home page
+    - `actuarial_page.py`: Actuarial calculations page
+    - `finance_page.py`: Financial calculations page
+    - `settings_page.py`: Application settings page
+  - `main_window.py`: Main application window
 - `utils/`: Utility functions and helpers
   - `error_handling.py`: Standardized error handling system
   - `logging.py`: Logging strategy implementation
-- `requirements.txt`: Python dependencies (for development)
-- `setup.py`: Package setup configuration
+- `requirements.txt`: Python dependencies (all required)
 - `run.py`: Executable entry point script
-- `pytest.ini`: Configuration for the pytest framework
 
 ## Development Environment
 
-This is a Python-based project using Tkinter for the GUI with the following environment setup:
+This is a Python-based project using ttkbootstrap (modern Tkinter) for the GUI with the following environment setup:
 - Python virtual environment (`.venv/`)
 - VSCode as the editor (`.vscode/`)
 - Dependency-injector for service management
-- Tkinter for GUI components (part of Python standard library)
-- R integration via rpy2 (optional)
-- Pandas, Matplotlib for data analysis (optional)
-- Kaggle API for data science integration (optional)
-- Black for code formatting
-- Flake8 for linting
+- ttkbootstrap for modern UI components
+- R integration via rpy2
+- Pandas and Matplotlib for data analysis
+- Pydantic for configuration validation
 - Pytest for testing with DI container support
 
 ## Setup and Running
 
-### Basic Installation
+### Installation
 ```bash
 # Create and activate a virtual environment
 python -m venv .venv
@@ -68,41 +68,14 @@ source .venv/bin/activate  # Unix/macOS
 # or
 .venv\Scripts\activate     # Windows
 
-# Install core dependencies
-pip install -e .
-```
-
-### Development Installation
-```bash
-# Install with development tools
-pip install -e ".[dev]"
-
 # Install all dependencies
-pip install -e ".[all]"
-
-# Or use requirements.txt for all dependencies
 pip install -r requirements.txt
 ```
 
 ### Running the Application
 ```bash
-# Method 1: Using run.py script
+# Using run.py script
 python run.py
-
-# Method 2: Using entry point (after installation)
-universal-app
-```
-
-### Feature-Specific Dependencies
-```bash
-# R integration only
-pip install -e ".[r]"
-
-# Data analysis capabilities only
-pip install -e ".[data]"
-
-# Kaggle integration only
-pip install -e ".[kaggle]"
 ```
 
 ## Application Architecture
@@ -118,8 +91,8 @@ The application follows a clean architecture pattern with clear separation of co
      - Uses callback to notify when navigation items are selected
    - Page System (using composition):
      - `PageContainer`: Component for page layout (in `ui/components/page_container.py`)
-     - `ContentPage`: Uses composition to create pages (in `ui/pages/content_page.py`)
-     - Pages are shown/hidden based on navigation
+     - Pages shown/hidden based on navigation
+     - Includes standard header, footer, and loading indicators
 
 2. **Service Layer**:
    - Service interfaces in `services/interfaces/` define contracts as protocols
@@ -134,11 +107,11 @@ The application follows a clean architecture pattern with clear separation of co
 3. **External Integrations**:
    - R integration via `r_service.py` (implements RServiceInterface)
    - R scripts stored in the `r_scripts/` directory
-   - External APIs accessed through appropriate services (e.g., Kaggle API)
+   - Common utilities for both R scripts and Python services
 
 4. **Application Core**:
    - `Application` class in `core/app.py` manages application lifecycle
-   - Centralized configuration via `config.py`
+   - Centralized configuration via `config.py` using Pydantic models
    - Configuration loading from multiple sources
    - Logging setup and management
 
@@ -153,7 +126,6 @@ The application follows a clean architecture pattern with clear separation of co
    - Functional tests for end-to-end workflows
    - Test fixtures for common testing scenarios in `conftest.py`
    - Mock services via the DI container's `override_provider` mechanism
-   - Test markers for categorizing different types of tests
    - UI component testing with mocked service dependencies
 
 ## Adding New Projects
@@ -177,7 +149,7 @@ To add a new project module to the application:
    - Ensure singleton behavior if appropriate
 
 4. **Create UI Components**:
-   - Add a new page class in `ui/pages/` using `ContentPage` as base
+   - Add a new page class in `ui/pages/`
    - Retrieve services via the container in the constructor
    - Follow the composition pattern for UI elements
    - Delegate business logic to services
@@ -192,8 +164,6 @@ To add a new project module to the application:
    - Add test fixtures for the new services in `conftest.py` if needed
    - Test the UI components with mocked services
    - Add integration tests for service interactions
-
-For a complete example of extending the application, see the comprehensive guide in the README's "Adding New Projects" section.
 
 ## Development Workflow
 
@@ -228,9 +198,7 @@ The project uses pytest for testing with different test categories:
    - `functional`: Functional tests
    - `container`: Tests that use the dependency injection container
    - `r_dependent`: Tests requiring R installation
-   - `kaggle_dependent`: Tests requiring Kaggle credentials
    - `slow`: Tests that take a long time to run
-   - `network`: Tests requiring network access
 
 ## Design Principles
 
@@ -268,7 +236,7 @@ The application implements SOLID design principles:
 Additional architectural principles:
 
 6. **Composition Over Inheritance**:
-   - Use composition (e.g., `PageContainer`) to share functionality
+   - Use composition to share functionality
    - Favor object composition over class inheritance
    - Enables more flexible designs and avoids inheritance hierarchies
 
@@ -291,20 +259,37 @@ Additional architectural principles:
    - Interfaces enable precise contract verification
    - Container-based tests ensure loose coupling
 
+## Current Modules
+
+The application currently includes the following modules:
+
+1. **Core Application**: Basic application framework with configuration system
+
+2. **Actuarial Module**:
+   - Mortality table calculations
+   - Present value calculations
+   - Life expectancy projections
+   - Visualizations for actuarial data
+
+3. **Finance Module**:
+   - Yield curve calculations
+   - Option pricing models
+   - Portfolio metrics
+   - Financial visualization tools
+
 ## Future Direction
 
-As projects are added to this repository:
+As the project expands:
 
-1. Create dedicated modules for each project
+1. Create dedicated modules for additional domain-specific projects
 2. Update the navigation system to include new projects
 3. Consider implementing a plugin architecture for more complex projects
 4. Expand the testing framework as needed
 5. Further improve these architectural components:
    - Enhance the dependency injection container with more features
    - Create a comprehensive event system for inter-service communication
-   - Add a transaction management system for multi-step operations
-   - Implement robust validation frameworks for inputs and outputs
    - Add more sophisticated caching mechanisms
+   - Expand the R script integration capabilities
+   - Add more visualization options using Matplotlib and other libraries
    - Implement a plugin architecture for dynamic module loading
-   - Enhance testing with automated UI testing
-   - Add performance monitoring and diagnostics
+   - Add automated UI testing
