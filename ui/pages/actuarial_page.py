@@ -50,12 +50,25 @@ class ActuarialPage(PageContainer):
             navigation_callback=navigation_callback
         )
         
-        # Initialize service
-        self.actuarial_service = get_actuarial_service()
+        # Initialize variables
+        self.actuarial_service = None
+        self.r_service = None
+        self.r_available = False
         
-        # Check if R is available
-        self.r_service = get_r_service()
-        self.r_available = self.r_service.is_available()
+        # Try to get services
+        try:
+            # Initialize services
+            self.actuarial_service = get_actuarial_service()
+            self.r_service = get_r_service()
+            self.r_available = self.r_service.is_available()
+        except Exception as e:
+            logger.error(f"Error initializing services: {e}")
+            # Show an error message
+            self.show_message(
+                "Plugin services are not available. Make sure all plugins are properly registered and activated.",
+                kind="error",
+                duration=None
+            )
         
         # Set up tab control for different tools
         self._create_tab_control()
@@ -289,6 +302,11 @@ class ActuarialPage(PageContainer):
     def _calculate_mortality(self):
         """Calculate and display mortality data."""
         try:
+            # Check if services are available
+            if not self.actuarial_service or not self.r_service:
+                self.status_var.set("Services not available. Please check that all plugins are properly loaded.")
+                return
+            
             # Check if R is available
             if not self.r_available:
                 self.status_var.set("R integration is not available. Run 'pip install rpy2' and install R with the 'lifecontingencies' package.")
@@ -650,6 +668,11 @@ class ActuarialPage(PageContainer):
     def _calculate_present_value(self):
         """Calculate and display present value results."""
         try:
+            # Check if services are available
+            if not self.actuarial_service or not self.r_service:
+                self.pv_status_var.set("Services not available. Please check that all plugins are properly loaded.")
+                return
+            
             # Check if R is available
             if not self.r_available:
                 self.pv_status_var.set("R integration is not available. Run 'pip install rpy2' and install R with the 'lifecontingencies' package.")

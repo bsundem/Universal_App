@@ -26,6 +26,9 @@ class Container(containers.DeclarativeContainer):
     
     This container follows the Dependency Inversion Principle, allowing high-level
     modules to depend on abstractions rather than concrete implementations.
+    
+    Note: This container is now primarily used for configuration and resources,
+    as service implementation is handled by the plugin system.
     """
     
     # Configuration
@@ -34,41 +37,11 @@ class Container(containers.DeclarativeContainer):
     # Event bus instance
     event_bus_provider = providers.Object(event_bus)
     
-    # Services - use dynamic providers for backward compatibility
-    # The actual service classes are loaded dynamically to avoid import issues
-    # when moving to the plugin system
+    # Other resources can be added here
+    resources = providers.Dict({})
     
-    @classmethod
-    def _get_service_class(cls, module_path, class_name):
-        """Dynamically import a class"""
-        try:
-            module = importlib.import_module(module_path)
-            return getattr(module, class_name)
-        except (ImportError, AttributeError) as e:
-            logger.warning(f"Could not load service class {class_name} from {module_path}: {e}")
-            return None
-    
-    # Legacy services - these will be used as fallbacks if plugins aren't available
-    r_service = providers.Singleton(
-        providers.Factory(
-            lambda scripts_dir: Container._get_service_class('services.r_service', 'RService')(scripts_dir),
-            scripts_dir=config.services.r_integration.scripts_dir
-        )
-    )
-    
-    actuarial_service = providers.Singleton(
-        providers.Factory(
-            lambda data_dir: Container._get_service_class('services.actuarial.actuarial_service', 'ActuarialService')(data_dir),
-            data_dir=config.services.actuarial.data_dir
-        )
-    )
-    
-    finance_service = providers.Singleton(
-        providers.Factory(
-            lambda data_dir: Container._get_service_class('services.finance.finance_service', 'FinanceService')(data_dir),
-            data_dir=config.services.finance.data_dir
-        )
-    )
+    # Provider for the application instance
+    app = providers.Dependency()
     
     # Other resources
     # Initialize with empty dict that can be updated
@@ -296,19 +269,16 @@ def get_r_service():
     Get the R service instance.
     
     Returns:
-        R service instance (plugin or traditional)
-    """
-    # First try to get the plugin version
-    try:
-        from services.plugins.registry import plugin_registry
-        plugin = plugin_registry.get_plugin("r_service")
-        if plugin:
-            return plugin
-    except (ImportError, KeyError, AttributeError) as e:
-        logger.debug(f"R service plugin not found, falling back to traditional service: {e}")
+        R service plugin instance
         
-    # Fall back to the traditional service
-    return container.get_container().r_service()
+    Raises:
+        RuntimeError: If the R service plugin is not available
+    """
+    from services.plugins.registry import plugin_registry
+    plugin = plugin_registry.get_plugin("r_service")
+    if not plugin:
+        raise RuntimeError("R service plugin is not available. Make sure the plugin is properly registered and activated.")
+    return plugin
 
 
 def get_actuarial_service():
@@ -316,19 +286,16 @@ def get_actuarial_service():
     Get the actuarial service instance.
     
     Returns:
-        Actuarial service instance (plugin or traditional)
+        Actuarial service plugin instance
+        
+    Raises:
+        RuntimeError: If the actuarial service plugin is not available
     """
-    # First try to get the plugin version
-    try:
-        from services.plugins.registry import plugin_registry
-        plugin = plugin_registry.get_plugin("actuarial_service")
-        if plugin:
-            return plugin
-    except (ImportError, KeyError, AttributeError) as e:
-        logger.debug(f"Actuarial service plugin not found, falling back to traditional service: {e}")
-    
-    # Fall back to the traditional service
-    return container.get_container().actuarial_service()
+    from services.plugins.registry import plugin_registry
+    plugin = plugin_registry.get_plugin("actuarial_service")
+    if not plugin:
+        raise RuntimeError("Actuarial service plugin is not available. Make sure the plugin is properly registered and activated.")
+    return plugin
 
 
 def get_finance_service():
@@ -336,16 +303,33 @@ def get_finance_service():
     Get the finance service instance.
     
     Returns:
-        Finance service instance (plugin or traditional)
+        Finance service plugin instance
+        
+    Raises:
+        RuntimeError: If the finance service plugin is not available
     """
-    # First try to get the plugin version
-    try:
-        from services.plugins.registry import plugin_registry
-        plugin = plugin_registry.get_plugin("finance_service")
-        if plugin:
-            return plugin
-    except (ImportError, KeyError, AttributeError) as e:
-        logger.debug(f"Finance service plugin not found, falling back to traditional service: {e}")
+    from services.plugins.registry import plugin_registry
+    plugin = plugin_registry.get_plugin("finance_service")
+    if not plugin:
+        raise RuntimeError("Finance service plugin is not available. Make sure the plugin is properly registered and activated.")
+    return plugin
+
+
+def get_plugin(plugin_id):
+    """
+    Get any plugin by its ID.
     
-    # Fall back to the traditional service
-    return container.get_container().finance_service()
+    Args:
+        plugin_id: The ID of the plugin to retrieve
+        
+    Returns:
+        The plugin instance
+        
+    Raises:
+        RuntimeError: If the plugin is not available
+    """
+    from services.plugins.registry import plugin_registry
+    plugin = plugin_registry.get_plugin(plugin_id)
+    if not plugin:
+        raise RuntimeError(f"Plugin '{plugin_id}' is not available. Make sure the plugin is properly registered and activated.")
+    return plugin

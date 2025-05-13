@@ -94,10 +94,7 @@ class HomePage(PageContainer):
         status_frame = ttk.Frame(welcome_frame)
         status_frame.pack(fill=tk.X, pady=5)
         
-        # Check if R is available
-        r_service = get_r_service()
-        r_available = r_service.is_available()
-        
+        # Check if R service plugin is available
         r_status = ttk.Label(
             status_frame,
             text="R Integration: ",
@@ -106,12 +103,36 @@ class HomePage(PageContainer):
         )
         r_status.grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
         
-        r_status_value = ttk.Label(
-            status_frame,
-            text="Available" if r_available else "Not Available",
-            font=("Helvetica", 11),
-            bootstyle="success" if r_available else "danger"
-        )
+        try:
+            # Try to get R service plugin
+            r_service = get_r_service()
+            r_available = r_service.is_available()
+            
+            r_status_value = ttk.Label(
+                status_frame,
+                text="Available" if r_available else "Not Available",
+                font=("Helvetica", 11),
+                bootstyle="success" if r_available else "danger"
+            )
+        except Exception as e:
+            # Plugin is not available
+            logger.error(f"Error accessing R service plugin: {e}")
+            r_available = False
+            
+            r_status_value = ttk.Label(
+                status_frame,
+                text="Plugin Not Available",
+                font=("Helvetica", 11),
+                bootstyle="danger"
+            )
+            
+            # Show error message
+            self.show_message(
+                f"R service plugin is not available. Some features may not work properly.",
+                kind="error",
+                duration=None
+            )
+            
         r_status_value.grid(row=0, column=1, sticky=tk.W)
         
     def _create_service_cards(self):
@@ -292,10 +313,17 @@ class HomePage(PageContainer):
         
     def refresh(self):
         """Refresh the dashboard content."""
-        # Check if R is available
-        r_service = get_r_service()
-        r_available = r_service.is_available()
-        
-        # Update the status
-        # In a real app, we would update more dynamic content here
-        logger.debug(f"Refreshed home page, R available: {r_available}")
+        # Check if R service plugin is available
+        try:
+            r_service = get_r_service()
+            r_available = r_service.is_available()
+            # Update the status - in a real app, we would update more dynamic content here
+            logger.debug(f"Refreshed home page, R available: {r_available}")
+        except Exception as e:
+            logger.error(f"Error accessing R service plugin during refresh: {e}")
+            # Plugin is not available
+            self.show_message(
+                f"R service plugin is not available. Some features may not work properly.",
+                kind="error",
+                duration=None
+            )

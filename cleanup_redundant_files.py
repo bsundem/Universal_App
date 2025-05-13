@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 REDUNDANT_FILES = [
     "services/r_service.py",
     "services/actuarial/actuarial_service.py",
-    "services/finance/finance_service.py"
+    "services/finance/finance_service.py",
+    "services/actuarial/__init__.py",
+    "services/finance/__init__.py"
 ]
 
 # Create backup directory

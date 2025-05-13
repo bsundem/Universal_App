@@ -52,12 +52,25 @@ class FinancePage(PageContainer):
             navigation_callback=navigation_callback
         )
         
-        # Initialize service
-        self.finance_service = get_finance_service()
+        # Initialize variables
+        self.finance_service = None
+        self.r_service = None
+        self.r_available = False
         
-        # Check if R is available
-        self.r_service = get_r_service()
-        self.r_available = self.r_service.is_available()
+        # Try to get services
+        try:
+            # Initialize services
+            self.finance_service = get_finance_service()
+            self.r_service = get_r_service()
+            self.r_available = self.r_service.is_available()
+        except Exception as e:
+            logger.error(f"Error initializing services: {e}")
+            # Show an error message
+            self.show_message(
+                "Plugin services are not available. Make sure all plugins are properly registered and activated.",
+                kind="error",
+                duration=None
+            )
         
         # Set up tab control for different tools
         self._create_tab_control()
@@ -303,6 +316,11 @@ class FinancePage(PageContainer):
     def _calculate_yield_curve(self):
         """Calculate and display yield curve data."""
         try:
+            # Check if services are available
+            if not self.finance_service or not self.r_service:
+                self.yield_status_var.set("Services not available. Please check that all plugins are properly loaded.")
+                return
+            
             # Check if R is available
             if not self.r_available:
                 self.yield_status_var.set("R integration is not available. Run 'pip install rpy2' and install R to use this feature.")
@@ -784,6 +802,11 @@ class FinancePage(PageContainer):
     def _calculate_option_price(self):
         """Calculate and display option pricing results."""
         try:
+            # Check if services are available
+            if not self.finance_service or not self.r_service:
+                self.option_status_var.set("Services not available. Please check that all plugins are properly loaded.")
+                return
+            
             # Check if R is available
             if not self.r_available:
                 self.option_status_var.set("R integration is not available. Run 'pip install rpy2' and install R to use this feature.")
