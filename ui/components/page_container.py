@@ -106,6 +106,8 @@ class PageContainer(ttk.Frame):
         try:
             self.grid()
             self.update_content(**kwargs)
+            # Force update to prevent blank display until mouse movement
+            self.update_idletasks()
             logger.debug(f"Showing page: {self.page_id}")
         except Exception as e:
             report_error(e, f"Error showing page {self.page_id}", show_details=True)

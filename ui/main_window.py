@@ -79,6 +79,8 @@ class MainWindow:
         from ui.pages.home_page import HomePage
         from ui.pages.actuarial_page import ActuarialPage
         from ui.pages.finance_page import FinancePage
+        from ui.pages.settings_page import SettingsPage
+        from ui.pages.help_page import HelpPage
         
         # Create instances of each page
         # This will also register them with the sidebar
@@ -91,6 +93,14 @@ class MainWindow:
             navigation_callback=self.navigate
         )
         self.pages['finance'] = FinancePage(
+            self.content_frame, 
+            navigation_callback=self.navigate
+        )
+        self.pages['settings'] = SettingsPage(
+            self.content_frame, 
+            navigation_callback=self.navigate
+        )
+        self.pages['help'] = HelpPage(
             self.content_frame, 
             navigation_callback=self.navigate
         )
@@ -122,6 +132,9 @@ class MainWindow:
         
         # Update selected item in sidebar
         self.sidebar.select_item(page_name)
+        
+        # Force update the UI immediately
+        self.root.update_idletasks()
         
         logger.info(f"Navigated to {page_name} page")
         

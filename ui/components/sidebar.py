@@ -132,23 +132,27 @@ class Sidebar(ttk.Frame):
         
     def _create_layout(self):
         """Create the sidebar layout."""
+        # Import here to avoid circular imports
+        from core.config import config_manager
+        
         # Title section
         title_frame = ttk.Frame(self, bootstyle=SECONDARY)
         title_frame.pack(fill=tk.X, padx=10, pady=20)
         
+        # Create a label with background color to ensure it's visible
         app_title = ttk.Label(
             title_frame, 
-            text="Universal App",
+            text=config_manager.app.title,
             font=("Helvetica", 16, "bold"),
-            bootstyle="light"
+            bootstyle="inverse-light"
         )
         app_title.pack(fill=tk.X, padx=5)
         
         version = ttk.Label(
             title_frame, 
-            text=f"v{1.0}",
+            text=f"v{config_manager.app.version}",
             font=("Helvetica", 10),
-            bootstyle="light"
+            bootstyle="inverse-light"
         )
         version.pack(fill=tk.X)
         

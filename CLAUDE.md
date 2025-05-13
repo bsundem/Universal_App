@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This repository serves as a container for multiple projects until they grow large enough to be moved into their own repositories. It provides a universal application that hosts different projects in a single interface using a service-oriented architecture with clean interfaces and following SOLID design principles.
+This repository serves as a container for multiple projects. It provides a universal application that hosts different projects in a single interface using a service-oriented architecture with clean interfaces and following SOLID design principles.
 
 ## Project Structure
 
