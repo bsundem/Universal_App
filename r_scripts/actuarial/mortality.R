@@ -115,17 +115,36 @@ calculate_mortality <- function(age_from, age_to, interest_rate, table_type, gen
   # ax = present value of a whole life annuity of 1 per year
   v <- 1 / (1 + interest_rate)  # discount factor
   ax <- numeric(nrow(table))
-  for (i in 1:length(ax)) {
-    tpx <- numeric(nrow(table) - i + 1)
-    tpx[1] <- 1  # 0px = 1
-    for (j in 2:length(tpx)) {
-      tpx[j] <- tpx[j-1] * table$px[i + j - 2]
+  
+  # Completely rewrite this calculation to be more robust
+  for (i in 1:nrow(table)) {
+    # Calculate survival probabilities from age i
+    max_periods <- nrow(table) - i + 1
+    
+    # Initialize tpx vector (probability of surviving t periods from age x)
+    tpx <- rep(0, max_periods)
+    tpx[1] <- 1  # 0px = 1 (probability of surviving 0 periods is 1)
+    
+    # Calculate survival probabilities for subsequent periods
+    if (max_periods > 1) {
+      for (t in 2:max_periods) {
+        # Use the probability of survival for the previous age
+        idx <- i + t - 2
+        if (idx <= nrow(table)) {
+          tpx[t] <- tpx[t-1] * table$px[idx]
+        } else {
+          # For safety, use the last available survival probability
+          tpx[t] <- tpx[t-1] * tail(table$px, 1)
+        }
+      }
     }
-    ax[i] <- sum(tpx * v^(0:(length(tpx)-1)))
+    
+    # Calculate present value of annuity using discrete approximation
+    discount_factors <- v^(0:(max_periods-1))
+    ax[i] <- sum(tpx * discount_factors)
   }
   table$ax <- ax
   
   # Return the results
   return(table)
 }
-EOF < /dev/null

@@ -5,7 +5,7 @@
 price_option <- function(option_type, spot_price, strike_price, time_to_expiry,
                          risk_free_rate, volatility, dividend_yield = 0) {
   # Validate inputs
-  if (\!(option_type %in% c("call", "put"))) {
+  if (!(option_type %in% c("call", "put"))) {
     stop("Option type must be 'call' or 'put'.")
   }
   

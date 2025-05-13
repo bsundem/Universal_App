@@ -58,7 +58,8 @@ calculate_yield_curve <- function(start_date, end_date, curve_type = "nominal") 
   }
   
   # Set variable for R script return
-  yield_curve_data <- results
+  # Assign the result to a global variable so it can be accessed
+  assign("yield_curve_data", results, envir = .GlobalEnv)
   
   return(results)
 }

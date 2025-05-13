@@ -123,7 +123,7 @@ class FinanceService:
                     operation="calculate_yield_curve"
                 )
             
-            r_service = get_r_service()
+            r_service = self._get_r_service()
 
             # Execute the R script
             r_service.execute_script(self.yield_curve_script_path)
@@ -273,7 +273,7 @@ class FinanceService:
                     operation="price_option"
                 )
             
-            r_service = get_r_service()
+            r_service = self._get_r_service()
 
             # Execute the R script
             r_service.execute_script(self.option_pricing_script_path)
@@ -437,7 +437,7 @@ class FinanceService:
                     operation="calculate_portfolio_metrics"
                 )
             
-            r_service = get_r_service()
+            r_service = self._get_r_service()
 
             # Execute the R script
             r_service.execute_script(self.portfolio_script_path)

@@ -53,11 +53,23 @@ class ActuarialPage(PageContainer):
         # Initialize service
         self.actuarial_service = get_actuarial_service()
         
+        # Check if R is available
+        self.r_service = get_r_service()
+        self.r_available = self.r_service.is_available()
+        
         # Set up tab control for different tools
         self._create_tab_control()
         
         # Set up the page content
         self.setup_content()
+        
+        # Show warning banner if R is not available
+        if not self.r_available:
+            self.show_message(
+                "R integration is not available. To enable: 1) pip install rpy2, 2) Install R, 3) In R run: install.packages('lifecontingencies')",
+                kind="warning",
+                duration=None
+            )
         
         logger.debug("Actuarial page initialized")
         
@@ -277,6 +289,11 @@ class ActuarialPage(PageContainer):
     def _calculate_mortality(self):
         """Calculate and display mortality data."""
         try:
+            # Check if R is available
+            if not self.r_available:
+                self.status_var.set("R integration is not available. Run 'pip install rpy2' and install R with the 'lifecontingencies' package.")
+                return
+                
             # Get input values
             age_from = int(self.age_from_var.get())
             age_to = int(self.age_to_var.get())
@@ -633,6 +650,11 @@ class ActuarialPage(PageContainer):
     def _calculate_present_value(self):
         """Calculate and display present value results."""
         try:
+            # Check if R is available
+            if not self.r_available:
+                self.pv_status_var.set("R integration is not available. Run 'pip install rpy2' and install R with the 'lifecontingencies' package.")
+                return
+                
             # Get input values
             age = int(self.pv_age_var.get())
             payment = float(self.pv_payment_var.get())

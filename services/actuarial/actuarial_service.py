@@ -67,6 +67,7 @@ class ActuarialService:
         """Get the R service, importing it dynamically to avoid circular imports."""
         if self._r_service is None:
             # Import here to avoid circular imports
+            # Fix circular import by importing inside the method
             from services.container import get_r_service
             self._r_service = get_r_service()
         return self._r_service
@@ -115,7 +116,7 @@ class ActuarialService:
         )
         
         try:
-            r_service = get_r_service()
+            r_service = self._get_r_service()
 
             # Execute the R script
             r_service.execute_script(self.mortality_script_path)
@@ -200,7 +201,7 @@ class ActuarialService:
             freq_map = {"Annual": 1, "Semi-annual": 2, "Quarterly": 4, "Monthly": 12}
             freq_factor = freq_map.get(frequency, 1)
             
-            r_service = get_r_service()
+            r_service = self._get_r_service()
 
             # Execute the R script
             r_service.execute_script(self.present_value_script_path)
@@ -261,7 +262,7 @@ class ActuarialService:
         logger.info("Getting available mortality tables", "get_available_mortality_tables")
         
         try:
-            r_service = get_r_service()
+            r_service = self._get_r_service()
 
             # Execute the R script
             r_service.execute_script(self.mortality_script_path)

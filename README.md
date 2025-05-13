@@ -27,6 +27,7 @@ Universal App is a Python-based application that demonstrates clean architecture
 
 - Python 3.8+
 - R (for statistical calculations)
+- R Package: lifecontingencies
 
 ### Installation
 

@@ -55,11 +55,23 @@ class FinancePage(PageContainer):
         # Initialize service
         self.finance_service = get_finance_service()
         
+        # Check if R is available
+        self.r_service = get_r_service()
+        self.r_available = self.r_service.is_available()
+        
         # Set up tab control for different tools
         self._create_tab_control()
         
         # Set up the page content
         self.setup_content()
+        
+        # Show warning banner if R is not available
+        if not self.r_available:
+            self.show_message(
+                "R integration is not available. To enable: 1) pip install rpy2, 2) Install R from cran.r-project.org",
+                kind="warning",
+                duration=None
+            )
         
         logger.debug("Finance page initialized")
         
@@ -291,6 +303,11 @@ class FinancePage(PageContainer):
     def _calculate_yield_curve(self):
         """Calculate and display yield curve data."""
         try:
+            # Check if R is available
+            if not self.r_available:
+                self.yield_status_var.set("R integration is not available. Run 'pip install rpy2' and install R to use this feature.")
+                return
+                
             # Get input values
             start_date = self.start_date_var.get()
             end_date = self.end_date_var.get()
@@ -767,6 +784,11 @@ class FinancePage(PageContainer):
     def _calculate_option_price(self):
         """Calculate and display option pricing results."""
         try:
+            # Check if R is available
+            if not self.r_available:
+                self.option_status_var.set("R integration is not available. Run 'pip install rpy2' and install R to use this feature.")
+                return
+                
             # Get input values
             option_type = self.option_type_var.get()
             spot_price = float(self.spot_price_var.get())
@@ -841,6 +863,11 @@ class FinancePage(PageContainer):
         This creates a plot showing option value vs. stock price for
         different stock prices around the current spot price.
         """
+        # Check if R is available
+        if not self.r_available:
+            self.option_status_var.set("R integration is not available. Cannot create visualization.")
+            return
+            
         # Clear the figure
         self.option_fig.clear()
         
@@ -856,11 +883,16 @@ class FinancePage(PageContainer):
         # Calculate option values for each price
         values = []
         for p in prices:
-            result = self.finance_service.price_option(
-                option_type, p, strike_price, time_to_expiry,
-                risk_free_rate, volatility, dividend_yield
-            )
-            values.append(result["price"])
+            try:
+                result = self.finance_service.price_option(
+                    option_type, p, strike_price, time_to_expiry,
+                    risk_free_rate, volatility, dividend_yield
+                )
+                values.append(result["price"])
+            except Exception as e:
+                logger.error(f"Error calculating option price: {e}")
+                self.option_status_var.set(f"Error during visualization: {str(e)}")
+                return
             
         # Convert to array
         values = np.array(values)

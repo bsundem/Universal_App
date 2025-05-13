@@ -4,17 +4,17 @@
 # Function to calculate portfolio metrics
 calculate_portfolio_metrics <- function(returns_matrix, weights) {
   # Validate inputs
-  if (\!is.matrix(returns_matrix)) {
+  if (!is.matrix(returns_matrix)) {
     stop("Returns must be a matrix with each column representing an asset.")
   }
   
   n_assets <- ncol(returns_matrix)
   
-  if (length(weights) \!= n_assets) {
+  if (length(weights) != n_assets) {
     stop("Number of weights must match number of assets.")
   }
   
-  if (sum(weights) \!= 1) {
+  if (sum(weights) != 1) {
     # Normalize weights to sum to 1
     weights <- weights / sum(weights)
   }
@@ -45,4 +45,3 @@ calculate_portfolio_metrics <- function(returns_matrix, weights) {
   
   return(result)
 }
-EOF < /dev/null
