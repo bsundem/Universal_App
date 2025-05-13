@@ -13,7 +13,7 @@ import sys
 import logging
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 import tkinter as tk
 from tkinter import ttk as tk_ttk  # Original ttk
@@ -32,6 +32,12 @@ from core.config import config_manager
 
 # Import services container
 from services.container import container
+
+# Import event system
+from utils.events import event_bus, SystemEvent, ApplicationStartedEvent, ApplicationShuttingDownEvent
+
+# Import plugin system
+from services.plugins.registry import plugin_registry
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -61,7 +67,14 @@ class Application:
         self._setup_paths()
         self._configure_logging()
         self._init_services()
+        self._init_plugins()
         self._init_ui()
+        
+        # Publish application started event
+        event_bus.publish(ApplicationStartedEvent(
+            source="application",
+            version=config_manager.app.version
+        ))
         
         logger.info(f"Application initialized: {config_manager.app.title} {config_manager.app.version}")
     
@@ -127,6 +140,72 @@ class Application:
         
         logger.debug("Services initialized")
         
+    def _init_plugins(self) -> None:
+        """Initialize and load plugins."""
+        # Get plugin directories from config
+        plugin_packages = getattr(config_manager.get_config(), "plugins", {}).get("packages", [])
+        
+        # Always include our plugin packages
+        core_plugin_packages = [
+            "services.plugins",      # Main plugin package
+            "services.plugins.examples"  # Example plugins
+        ]
+        
+        for pkg in core_plugin_packages:
+            if pkg not in plugin_packages:
+                plugin_packages.append(pkg)
+        
+        # Register plugin packages
+        discovered_plugins = []
+        for package in plugin_packages:
+            try:
+                discovered = plugin_registry.register_plugin_package(package)
+                discovered_plugins.extend(discovered)
+                logger.info(f"Registered plugin package {package} with {len(discovered)} plugins")
+            except Exception as e:
+                logger.error(f"Error registering plugin package {package}: {e}", exc_info=True)
+                
+        # Activate plugins that should be auto-loaded
+        auto_load_plugins = getattr(config_manager.get_config(), "plugins", {}).get("auto_load", [])
+        
+        # Always activate our core service plugins
+        core_service_plugins = [
+            "r_service",
+            "actuarial_service",
+            "finance_service"
+        ]
+        
+        for plugin_id in core_service_plugins:
+            if plugin_id not in auto_load_plugins:
+                auto_load_plugins.append(plugin_id)
+        
+        # Always load example plugins in development
+        if config_manager.app.debug:
+            auto_load_plugins.extend([
+                "calculator",
+                "calculator_ui"
+            ])
+            
+        activated_plugins = []
+        for plugin_id in auto_load_plugins:
+            try:
+                if plugin_registry.activate_plugin(plugin_id):
+                    activated_plugins.append(plugin_id)
+                    logger.info(f"Activated plugin {plugin_id}")
+                else:
+                    logger.error(f"Failed to activate plugin {plugin_id}")
+            except Exception as e:
+                logger.error(f"Error activating plugin {plugin_id}: {e}", exc_info=True)
+                
+        logger.info(f"Discovered {len(discovered_plugins)} plugins, activated {len(activated_plugins)}")
+        
+        # Provide a list of the active plugins
+        active_plugin_ids = plugin_registry.list_active_plugins()
+        if active_plugin_ids:
+            logger.info(f"Active plugins: {', '.join(active_plugin_ids)}")
+        else:
+            logger.info("No active plugins")
+        
     def _init_ui(self) -> None:
         """Initialize the application UI."""
         # Create the root window
@@ -164,7 +243,34 @@ class Application:
         # Create main window
         self.main_window = MainWindow(self.root)
         
+        # Register UI plugins with the main window
+        self._register_ui_plugins()
+        
         logger.debug("UI initialized")
+        
+    def _register_ui_plugins(self) -> None:
+        """Register UI plugins with the main window."""
+        # Get active plugins
+        active_plugins = plugin_registry.list_active_plugins()
+        
+        # Find UI plugins
+        from services.plugins.base import UIPlugin
+        ui_plugins = []
+        
+        for plugin_id in active_plugins:
+            plugin = plugin_registry._plugin_manager.get_plugin(plugin_id)
+            if isinstance(plugin, UIPlugin):
+                ui_plugins.append(plugin)
+                
+        # Register UI plugins with main window
+        for plugin in ui_plugins:
+            try:
+                if plugin.register_page(self.main_window):
+                    logger.info(f"Registered UI plugin {plugin.plugin_id} with main window")
+                else:
+                    logger.error(f"Failed to register UI plugin {plugin.plugin_id} with main window")
+            except Exception as e:
+                logger.error(f"Error registering UI plugin {plugin.plugin_id}: {e}", exc_info=True)
         
     def run(self) -> int:
         """
@@ -181,6 +287,12 @@ class Application:
             logger.exception(f"Unhandled exception in main loop: {e}")
             return 1
         finally:
+            # Publish application shutting down event
+            event_bus.publish(ApplicationShuttingDownEvent(
+                source="application"
+            ))
+            
+            # Perform cleanup
             self._cleanup()
             
     def _cleanup(self) -> None:
