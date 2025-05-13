@@ -6,11 +6,54 @@ allowing for separation of R and Python code while maintaining integration.
 """
 import os
 from typing import Dict, List, Any, Optional, Union
+import sys
 
-import rpy2.robjects as robjects
-from rpy2.robjects import pandas2ri, numpy2ri
-from rpy2.robjects.packages import importr
-from rpy2.robjects.conversion import localconverter
+# Try to import rpy2, but allow for graceful fallback if not available
+try:
+    import rpy2.robjects as robjects
+    from rpy2.robjects import pandas2ri, numpy2ri
+    from rpy2.robjects.packages import importr
+    from rpy2.robjects.conversion import localconverter
+    RPY2_AVAILABLE = True
+except ImportError:
+    RPY2_AVAILABLE = False
+    # Create dummy robjects for type checking
+    class DummyR:
+        def __call__(self, *args, **kwargs):
+            return None
+        def assign(self, *args, **kwargs):
+            return None
+    
+    class DummyRobjects:
+        r = DummyR()
+        def FloatVector(self, x):
+            return x
+        def StrVector(self, x):
+            return x
+        def BoolVector(self, x):
+            return x
+        
+    robjects = DummyRobjects()
+    pandas2ri = None
+    numpy2ri = None
+    
+    def importr(name):
+        return None
+    
+    class DummyConverter:
+        def __init__(self):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+    
+    class LocalConverter:
+        def __call__(self, *args):
+            return DummyConverter()
+    
+    localconverter = LocalConverter()
+
 import pandas as pd
 import numpy as np
 
@@ -21,8 +64,9 @@ from services.interfaces.r_service import RServiceInterface
 from utils.error_handling import ServiceError, handle_service_errors
 from utils.logging import ServiceLogger
 
-# Enable pandas-to-R conversion
-pandas2ri.activate()
+# Enable pandas-to-R conversion if available
+if RPY2_AVAILABLE:
+    pandas2ri.activate()
 
 # Get service logger
 logger = ServiceLogger("r_service")
@@ -54,6 +98,16 @@ class RService:
         # Log initialization
         logger.info(f"Initializing R service with scripts directory: {self.scripts_dir}")
         
+        # Initialize attributes
+        self.base = None
+        self.stats = None
+        self.lifecontingencies = None
+        
+        # Check if R integration is available
+        if not RPY2_AVAILABLE:
+            logger.warning("R integration is not available: rpy2 module is not installed", "init")
+            return
+        
         # Try to initialize R
         try:
             # Try to load common R packages
@@ -80,6 +134,10 @@ class RService:
         Returns:
             bool: True if R is available, False otherwise
         """
+        if not RPY2_AVAILABLE:
+            logger.warning("R integration is not available: rpy2 module is not installed", "is_available")
+            return False
+            
         try:
             # Try to evaluate a simple R expression
             result = robjects.r('1+1')
@@ -102,6 +160,14 @@ class RService:
         Raises:
             ServiceError: If execution fails
         """
+        if not RPY2_AVAILABLE:
+            raise ServiceError(
+                "R integration is not available: rpy2 module is not installed",
+                service="R",
+                operation="execute_script",
+                details={"script_path": script_path}
+            )
+            
         # Construct the full path to the script
         full_path = os.path.join(self.scripts_dir, script_path)
 
@@ -135,6 +201,13 @@ class RService:
         Raises:
             ServiceError: If execution fails
         """
+        if not RPY2_AVAILABLE:
+            raise ServiceError(
+                "R integration is not available: rpy2 module is not installed",
+                service="R",
+                operation="run_r_code"
+            )
+            
         logger.debug(f"Running R code: {r_code}", "run_r_code")
         
         # Execute the R code
@@ -155,6 +228,14 @@ class RService:
         Raises:
             ServiceError: If setting the variable fails
         """
+        if not RPY2_AVAILABLE:
+            raise ServiceError(
+                "R integration is not available: rpy2 module is not installed",
+                service="R",
+                operation="set_variable",
+                details={"name": name}
+            )
+            
         logger.debug(f"Setting R variable: {name}", "set_variable")
         
         # Convert Python value to R value
@@ -209,6 +290,14 @@ class RService:
         Raises:
             ServiceError: If the function call fails
         """
+        if not RPY2_AVAILABLE:
+            raise ServiceError(
+                "R integration is not available: rpy2 module is not installed",
+                service="R",
+                operation="call_function",
+                details={"function_name": function_name}
+            )
+            
         logger.debug(f"Calling R function: {function_name} with arguments {kwargs}", "call_function")
 
         # Set each argument as a variable in the R environment
@@ -236,6 +325,9 @@ class RService:
         Raises:
             ServiceError: If there's an issue with the path
         """
+        if not RPY2_AVAILABLE:
+            logger.warning("R integration is not available, but script path can still be provided", "get_script_path")
+            
         full_path = os.path.join(self.scripts_dir, script_path)
 
         # Additional validation
@@ -263,6 +355,14 @@ class RService:
         Raises:
             ServiceError: If getting the variable fails
         """
+        if not RPY2_AVAILABLE:
+            raise ServiceError(
+                "R integration is not available: rpy2 module is not installed",
+                service="R",
+                operation="get_variable",
+                details={"name": name}
+            )
+            
         logger.debug(f"Getting R variable: {name}", "get_variable")
         
         # Get variable from R environment
@@ -282,6 +382,14 @@ class RService:
         Raises:
             ServiceError: If execution fails or result is not a data frame
         """
+        if not RPY2_AVAILABLE:
+            raise ServiceError(
+                "R integration is not available: rpy2 module is not installed",
+                service="R",
+                operation="get_dataframe",
+                details={"r_expression": r_expression}
+            )
+            
         logger.debug(f"Getting DataFrame from R expression: {r_expression}", "get_dataframe")
         
         # Execute the R code

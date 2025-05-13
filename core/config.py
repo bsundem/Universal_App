@@ -8,7 +8,7 @@ import os
 import json
 import logging
 from typing import Any, Dict, Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 

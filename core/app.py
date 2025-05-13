@@ -16,16 +16,25 @@ from pathlib import Path
 from typing import Optional
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk as tk_ttk  # Original ttk
 
 # Import ttkbootstrap for modern UI styling
-import ttkbootstrap as ttk
+try:
+    import ttkbootstrap as ttk
+    USING_BOOTSTRAP = True
+except ImportError:
+    # Fall back to standard ttk if ttkbootstrap is not available
+    ttk = tk_ttk
+    USING_BOOTSTRAP = False
 
 # Import core modules
 from core.config import config_manager
 
 # Import services container
 from services.container import container
+
+# Get logger
+logger = logging.getLogger(__name__)
 
 # Import UI components
 from ui.main_window import MainWindow
@@ -121,12 +130,20 @@ class Application:
     def _init_ui(self) -> None:
         """Initialize the application UI."""
         # Create the root window
-        # Use ttkbootstrap instead of regular tk
-        self.root = ttk.Window(
-            title=config_manager.ui.window.title,
-            themename=config_manager.app.theme,
-            size=(config_manager.ui.window.width, config_manager.ui.window.height)
-        )
+        if USING_BOOTSTRAP:
+            # Use ttkbootstrap for modern styling
+            self.root = ttk.Window(
+                title=config_manager.ui.window.title,
+                themename=config_manager.app.theme,
+                size=(config_manager.ui.window.width, config_manager.ui.window.height)
+            )
+        else:
+            # Fall back to standard tkinter
+            self.root = tk.Tk()
+            self.root.title(config_manager.ui.window.title)
+            self.root.geometry(f"{config_manager.ui.window.width}x{config_manager.ui.window.height}")
+            
+        logger.info(f"UI initialized with {'ttkbootstrap' if USING_BOOTSTRAP else 'standard tkinter'}")
         
         # Set window minimum size
         self.root.minsize(

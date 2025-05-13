@@ -46,7 +46,11 @@ class Container(containers.DeclarativeContainer):
     )
     
     # Other resources
-    resources = providers.Dict()
+    # Initialize with empty dict that can be updated
+    resources = providers.Dict({})
+    
+    # Provider for the application instance
+    app = providers.Dependency()
     
 
 class ContainerManager:
@@ -71,7 +75,15 @@ class ContainerManager:
             **kwargs: Resources to add to the container
         """
         if not self._initialized:
-            self._container.resources.update(kwargs)
+            # Set the app dependency if provided
+            if 'app' in kwargs:
+                self._container.app.override(kwargs['app'])
+            
+            # Create a new dict provider with the combined resources
+            resources_dict = {}
+            resources_dict.update(kwargs)
+            self._container.resources.override(providers.Dict(resources_dict))
+            
             self._initialized = True
             logger.info("Container resources initialized")
     

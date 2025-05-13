@@ -14,9 +14,6 @@ import numpy as np
 # Import service interfaces
 from services.interfaces.actuarial_service import ActuarialServiceInterface
 
-# Import R service
-from services.container import get_r_service
-
 # Import error handling and logging
 from utils.error_handling import ServiceError, handle_service_errors
 from utils.logging import ServiceLogger
@@ -46,6 +43,10 @@ class ActuarialService:
             
         # Create directory if it doesn't exist
         os.makedirs(self.data_dir, exist_ok=True)
+        
+        # To avoid circular imports, we don't import r_service here
+        # Instead, we'll get it when needed in the methods
+        self._r_service = None
             
         # Set up temporary directory for calculations
         self.temp_dir = tempfile.mkdtemp()
@@ -62,6 +63,14 @@ class ActuarialService:
         logger.info(f"Initialized actuarial service with data dir: {self.data_dir}")
         logger.info(f"R scripts directory: {self.r_scripts_dir}")
 
+    def _get_r_service(self):
+        """Get the R service, importing it dynamically to avoid circular imports."""
+        if self._r_service is None:
+            # Import here to avoid circular imports
+            from services.container import get_r_service
+            self._r_service = get_r_service()
+        return self._r_service
+        
     @handle_service_errors("Actuarial")
     def is_r_available(self) -> bool:
         """
@@ -70,8 +79,8 @@ class ActuarialService:
         Returns:
             bool: True if R is available, False otherwise
         """
-        # Get R service from the container
-        r_service = get_r_service()
+        # Get R service without circular imports
+        r_service = self._get_r_service()
         return r_service.is_available()
         
     @handle_service_errors("Actuarial")

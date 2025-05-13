@@ -10,6 +10,7 @@ import sys
 import logging
 import traceback
 from functools import wraps
+from types import TracebackType
 from typing import Any, Callable, Dict, Optional, Type, TypeVar, Union, cast
 
 logger = logging.getLogger(__name__)
@@ -181,7 +182,7 @@ def report_error(
 def log_exception_handler(
     exc_type: Type[BaseException],
     exc_value: BaseException,
-    exc_traceback: Optional[traceback.TracebackType]
+    exc_traceback: Optional[TracebackType]
 ) -> None:
     """
     Global exception handler that logs unhandled exceptions.
