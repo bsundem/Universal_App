@@ -34,8 +34,8 @@ else:
 # Import the ContentPage class
 from ui.pages.content_page import ContentPage
 
-# Import service interfaces and provider
-from services.provider import get_r_service, get_actuarial_service, get_actuarial_data_manager
+# Import service interfaces and container
+from services.container import get_r_service, get_actuarial_service, get_actuarial_data_manager
 
 
 # Initialize logger
